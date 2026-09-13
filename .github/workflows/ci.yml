@@ -42,13 +42,15 @@ jobs:
           ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
             .#dyndrv-freetype 2>&1 | tee /tmp/dyndrv-freetype.log
 
-      # nixgg-mechanism coverage: openssl, hello, mosh all build via
-      # plain nix build against real nixpkgs, no wrapper needed.
+      # nixgg-mechanism coverage: openssl, hello, mosh, zstd all build via
+      # plain stdenv override, but need nixgg's own patched-nix + feature
+      # flags (see run-nixgg-ci.sh) -- the ambient daemon lacks
+      # ca-derivations/dynamic-derivations by default.
       - name: Build nixgg-mechanism packages (openssl, hello, mosh, zstd)
         run: |
           for attr in openssl hello mosh zstd; do
             echo "::group::Building .#$attr"
-            sudo env "PATH=$PATH" nix build --impure --no-link --print-out-paths -Lv \
+            ./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/nixgg-$attr.log"
             echo "::endgroup::"
           done
@@ -144,7 +146,7 @@ jobs:
             exit 0
           fi
           for attr in openssl hello mosh; do
-            OUT=$(sudo env "PATH=$PATH" nix build --impure --no-link --print-out-paths ".#$attr" || true)
+            OUT=$(./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done
           OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
