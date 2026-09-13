@@ -12,6 +12,9 @@ jobs:
   build:
     name: Build + benchmark across packages
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash --noprofile --norc -eo pipefail {0}
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
