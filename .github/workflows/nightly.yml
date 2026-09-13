@@ -55,7 +55,7 @@ jobs:
           # Dump one per-TU compile derivation's argv for manual review.
           TU_DRV=$(sudo find /nix/store -maxdepth 1 -name "*dyndrv-*.drv" | head -1 || true)
           if [[ -n "$TU_DRV" ]]; then
-            sudo nix derivation show "$TU_DRV" | tee /tmp/openssl-checkpoint-c.json
+            sudo env "PATH=$PATH" nix derivation show "$TU_DRV" | tee /tmp/openssl-checkpoint-c.json
           else
             echo "No per-TU .drv found -- checkpoint C inconclusive."
           fi
