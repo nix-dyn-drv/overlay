@@ -34,16 +34,20 @@ jobs:
       - name: Verify run-nix-ci.sh can fetch+build a working Nix
         run: ./try-it-out/run-nix-ci.sh --version
 
-      # Tier 0 (freetype) is the only dyn-drvs package that builds clean
-      # end to end (benchmarks/RESULTS.md); hard gate here. Tiers 1/1b/2
-      # (zstd, mosh, openssl) each hit a distinct open dyn-drvs bug
+      # Tier 0 (freetype, giflib) are the only dyn-drvs packages that build
+      # clean end to end (benchmarks/RESULTS.md); hard gate here. zstd/mosh/
+      # openssl each hit a distinct open dyn-drvs bug
       # (nix/packages/{zstd,mosh,openssl}.nix) and run informationally
       # below instead, so this job's pass/fail tracks regressions in the
       # proven path, not upstream bugs it can't fix.
-      - name: Build dyndrv-freetype (proven)
+      - name: Build proven dyndrv packages (freetype, giflib)
         run: |
-          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
-            .#dyndrv-freetype 2>&1 | tee /tmp/dyndrv-freetype.log
+          for attr in dyndrv-freetype dyndrv-giflib; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/$attr.log"
+            echo "::endgroup::"
+          done
 
       # nixgg-mechanism coverage: openssl, hello, mosh, zstd all build via
       # plain stdenv override, but need nixgg's own patched-nix + feature

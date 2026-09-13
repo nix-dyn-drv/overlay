@@ -97,8 +97,8 @@
             };
 
           # dyndrv mechanism (accelerate.mkAcceleratedStdenv / phases.split).
-          # freetype is dyn-drvs' own example; zstd/mosh/openssl are new,
-          # see nix/packages/*.nix.
+          # freetype is dyn-drvs' own example; giflib/zstd/mosh/openssl
+          # are new, see nix/packages/*.nix.
           dyndrv-freetype =
             (import (inputs.dyndrv.outPath + "/try-it-out/examples/07-accelerate-real-package.nix") {
               inherit pkgs;
@@ -106,6 +106,12 @@
               dyndrv = dyndrvLib;
               nixPackage = dyndrvPatchedNix;
             }).accelerated;
+
+          dyndrv-giflib = import ./nix/packages/giflib.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
 
           dyndrv-zstd = import ./nix/packages/zstd.nix {
             inherit pkgs;

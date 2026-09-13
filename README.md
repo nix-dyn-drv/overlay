@@ -1,26 +1,21 @@
-# overlay: Nix dynamic derivations at nixpkgs scale
+# overlay
 
-Nix's dynamic derivations (`builtins.outputOf`, `builder-rpc-v0` --
-[NixOS/nix#15793][pr-15793], not yet stable) applied to real nixpkgs
-C/C++ packages, via two independent mechanisms:
-[nixgg](https://github.com/tomberek/nixgg)'s `splitStdenv` (Go shim,
-proven at scale) and [dyn-drvs](https://github.com/tomberek/dyn-drvs)'
-`accelerate.mkAcceleratedStdenv` (Nix-language library, `dyndrv-*`
-outputs -- only `freetype` is dyn-drvs' own proof point; zstd/mosh/
-openssl coverage is new here). Both are real flake inputs, unmodified.
+Showcases Nix dynamic derivations (`builtins.outputOf`, `builder-rpc-v0`,
+[NixOS/nix#15793][pr-15793]) against real nixpkgs C/C++ packages, using
+two different libraries:
 
-## Numbers
+- [nixgg](https://github.com/tomberek/nixgg) — Go shim, already proven at scale.
+- [dyn-drvs](https://github.com/tomberek/dyn-drvs) — Nix-language library (`dyndrv-*` outputs).
 
-Per-TU acceleration only pays off when per-unit compile cost clears the
-~80ms/derivation registration tax:
+Full results, bugs found, and current status: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+Live benchmark dashboard: <https://nix-dyn-drv.github.io/overlay/benchmarks/dashboard/>
 
-| Package | Mechanism | One-line patch rebuild | Result |
-|---|---|---|---|
-| openssl (~2200 TUs) | nixgg `splitStdenv` | **2 / 2213 TUs** | win |
-| freetype (~45 TUs) | dyn-drvs `mkAcceleratedStdenv` | 2 / 45 TUs, but 17x *slower* wall-clock | loss |
+## The headline number
 
-Full table, real bugs found, and current status of zstd/mosh/openssl:
-[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
+nixgg's mechanism rebuilds only 2 of openssl's 2213 translation units on
+a one-line patch. dyn-drvs' mechanism, applied to freetype, is 17x
+*slower* than a plain rebuild — per-TU acceleration only pays off when
+each unit costs more to compile than the ~80ms registration overhead.
 
 ## Quickstart
 
@@ -29,10 +24,9 @@ $ ./try-it-out/run-nix.sh build --impure --no-link --print-out-paths .#dyndrv-fr
 ```
 
 `run-nix.sh` fetches a pinned NixOS/nix build and runs it against a
-local, non-daemon store (the ambient daemon can't serve
-`builder-rpc-v0`). nixgg-mechanism packages (`openssl`, `hello`, `mosh`,
-`zstd`) need no wrapper -- plain `nix build` works. CI uses
-`run-nix-ci.sh` instead, driving the same fetched Nix directly against
-the real `/nix/store` (safe there -- each job owns its VM exclusively).
+local store, since the system daemon doesn't support `builder-rpc-v0`.
+nixgg packages (`openssl`, `hello`, `mosh`, `zstd`) build with plain
+`nix build`. CI uses `run-nix-ci.sh`, which points the same Nix at the
+real `/nix/store` — safe there since each job gets its own VM.
 
 [pr-15793]: https://github.com/NixOS/nix/pull/15793
