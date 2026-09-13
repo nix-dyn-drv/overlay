@@ -47,7 +47,7 @@ jobs:
             .#dyndrv-openssl 2>&1 | tee /tmp/openssl-checkpoint-b.log
 
       - name: "Checkpoint C: inspect one per-TU derivation's argv"
-        if: steps.checkpoint_b.conclusion == 'success'
+        if: steps.checkpoint_b.outcome == 'success'
         run: |
           OUT_DRV=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
             .#dyndrv-openssl)
@@ -61,7 +61,7 @@ jobs:
           fi
 
       - name: "Checkpoint D: patch-rebuild count"
-        if: steps.checkpoint_b.conclusion == 'success'
+        if: steps.checkpoint_b.outcome == 'success'
         run: |
           RUN_NIX=./try-it-out/run-nix-ci.sh \
             ./benchmarks/patch-rebuild.sh \
@@ -75,8 +75,8 @@ jobs:
           {
             echo "### openssl triage outcome"
             echo ""
-            echo "Checkpoint B (accelerated build): ${{ steps.checkpoint_b.conclusion }}"
-            if [[ "${{ steps.checkpoint_b.conclusion }}" == "success" ]]; then
+            echo "Checkpoint B (accelerated build): ${{ steps.checkpoint_b.outcome }}"
+            if [[ "${{ steps.checkpoint_b.outcome }}" == "success" ]]; then
               echo ""
               echo "**Checkpoint B now PASSES** -- this contradicts the documented"
               echo "NO-GO in benchmarks/RESULTS.md. A dyn-drvs fix likely landed --"
