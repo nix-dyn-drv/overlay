@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CACHIX_CACHE: dynamicderivations
+
+jobs:
+  build:
+    name: Build + benchmark across packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      # Pull-only, no token needed -- works for fork PRs too, since the
+      # cache is public-readable. Push (below) is separate and gated on
+      # secret access. Real /nix/store now (see run-nix-ci.sh), so this
+      # cache substitutes/pushes exactly like an ordinary `nix build`.
+      - uses: cachix/cachix-action@v15
+        with:
+          name: ${{ env.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN || '' }}
+
+      - name: Verify run-nix-ci.sh can fetch+build a working Nix
+        run: ./try-it-out/run-nix-ci.sh --version
+
+      # Tier 0 (freetype) is the only dyn-drvs package that builds clean
+      # end to end (benchmarks/RESULTS.md); hard gate here. Tiers 1/1b/2
+      # (zstd, mosh, openssl) each hit a distinct open dyn-drvs bug
+      # (nix/packages/{zstd,mosh,openssl}.nix) and run informationally
+      # below instead, so this job's pass/fail tracks regressions in the
+      # proven path, not upstream bugs it can't fix.
+      - name: Build dyndrv-freetype (proven)
+        run: |
+          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+            .#dyndrv-freetype 2>&1 | tee /tmp/dyndrv-freetype.log
+
+      # nixgg-mechanism coverage: openssl, hello, mosh all build via
+      # plain nix build against real nixpkgs, no wrapper needed.
+      - name: Build nixgg-mechanism packages (openssl, hello, mosh, zstd)
+        run: |
+          for attr in openssl hello mosh zstd; do
+            echo "::group::Building .#$attr"
+            sudo nix build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/nixgg-$attr.log"
+            echo "::endgroup::"
+          done
+
+      - name: Restore benchmark history
+        id: bench-cache
+        uses: actions/cache@v4
+        with:
+          path: benchmarks/history.jsonl
+          key: bench-history-${{ github.run_id }}
+          restore-keys: bench-history-
+
+      - name: Patch-rebuild benchmark (freetype) + append to history
+        run: |
+          RUN_NIX=./try-it-out/run-nix-ci.sh \
+            ./benchmarks/patch-rebuild.sh \
+              packages.x86_64-linux.dyndrv-freetype \
+              packages.x86_64-linux.dyndrv-freetype \
+              | tee /tmp/freetype-bench.log
+
+          ratio=$(grep -oP 'ratio: \K[0-9.]+' /tmp/freetype-bench.log || echo "n/a")
+          printf '{"run_id":"%s","sha":"%s","date":"%s","package":"freetype","ratio":"%s"}\n' \
+            "${{ github.run_id }}" "${{ github.sha }}" "$(date -u +%FT%TZ)" "$ratio" \
+            >> benchmarks/history.jsonl
+
+      - name: Trend table in step summary
+        run: |
+          {
+            echo "### Benchmark trend (freetype patch-rebuild ratio, plain/accelerated)"
+            echo ""
+            echo "| run | date | ratio |"
+            echo "|---|---|---|"
+            tail -n 10 benchmarks/history.jsonl | \
+              jq -r '"| \(.run_id) | \(.date) | \(.ratio)x |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save benchmark history
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: benchmarks/history.jsonl
+          key: bench-history-${{ github.run_id }}
+
+      # Second, independent trend view: a live chart on gh-pages via
+      # benchmark-action/github-action-benchmark, alongside the
+      # plain-text history.jsonl trend table above.
+      - name: Record benchmark for gh-pages chart
+        if: github.event_name == 'push'
+        run: |
+          ratio=$(grep -oP 'ratio: \K[0-9.]+' /tmp/freetype-bench.log || echo "0")
+          jq -n --arg ratio "$ratio" \
+            '[{"name": "freetype patch-rebuild speedup (plain/accelerated)", "unit": "x", "value": ($ratio | tonumber)}]' \
+            > /tmp/gh-pages-bench.json
+
+      - name: Publish to gh-pages benchmark chart
+        if: github.event_name == 'push'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customSmallerIsBetter
+          output-file-path: /tmp/gh-pages-bench.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: benchmarks/dashboard
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+      # Informational: won't fail the job, just flags when a dyn-drvs fix lands.
+      - name: "Blocked tiers (informational, non-blocking): zstd, mosh"
+        continue-on-error: true
+        run: |
+          {
+            echo "### Blocked-tier status (see nix/packages/*.nix)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          for attr in dyndrv-zstd dyndrv-mosh; do
+            echo "::group::Attempting .#$attr (expected to fail, see nix/packages/$attr.nix)"
+            if ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
+                ".#$attr" > "/tmp/$attr.log" 2>&1; then
+              echo "$attr: PASSED (unexpected -- a dyn-drvs fix may have landed, update RESULTS.md/README)" \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$attr: still blocked (see /tmp/$attr.log in job logs)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Push to Cachix (same-repo contexts only)
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push' }}
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          if [[ -z "${CACHIX_AUTH_TOKEN:-}" ]]; then
+            echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
+            exit 0
+          fi
+          for attr in openssl hello mosh; do
+            OUT=$(sudo nix build --impure --no-link --print-out-paths ".#$attr" || true)
+            [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
+          done
+          OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
+          echo "$OUT" | cachix push "$CACHIX_CACHE"

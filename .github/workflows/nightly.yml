@@ -1,0 +1,121 @@
+name: Nightly (re-check blocked tiers + full benchmark suite)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}
+  push:
+    branches: [master]
+
+env:
+  CACHIX_CACHE: dynamicderivations
+
+jobs:
+  flagship:
+    name: openssl re-check (documented NO-GO, see nix/packages/openssl.nix) + full suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v15
+        with:
+          name: ${{ env.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Verify run-nix-ci.sh can fetch+build a working Nix
+        run: ./try-it-out/run-nix-ci.sh --version
+
+      # Baseline (unmodified openssl); regression check on nixpkgs pin/network setup.
+      - name: "Checkpoint A: baseline openssl builds"
+        run: |
+          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
+            .#dyndrv-openssl-baseline
+
+      # Documented NO-GO (benchmarks/RESULTS.md): fails at eval time with
+      # `attribute 'finalPackage' missing`, a gap in mkAcceleratedStdenv's
+      # finalAttrs-compatibility shim. continue-on-error since the failure
+      # is expected; kept running so a dyn-drvs fix gets noticed automatically.
+      - name: "Checkpoint B: accelerated openssl evaluates and builds (expected: fails)"
+        id: checkpoint_b
+        continue-on-error: true
+        run: |
+          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+            .#dyndrv-openssl 2>&1 | tee /tmp/openssl-checkpoint-b.log
+
+      - name: "Checkpoint C: inspect one per-TU derivation's argv"
+        if: steps.checkpoint_b.outcome == 'success'
+        run: |
+          OUT_DRV=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
+            .#dyndrv-openssl)
+          echo "Built: $OUT_DRV"
+          # Dump one per-TU compile derivation's argv for manual review.
+          TU_DRV=$(sudo find /nix/store -maxdepth 1 -name "*dyndrv-*.drv" | head -1 || true)
+          if [[ -n "$TU_DRV" ]]; then
+            sudo nix derivation show "$TU_DRV" | tee /tmp/openssl-checkpoint-c.json
+          else
+            echo "No per-TU .drv found -- checkpoint C inconclusive."
+          fi
+
+      - name: "Checkpoint D: patch-rebuild count"
+        if: steps.checkpoint_b.outcome == 'success'
+        run: |
+          RUN_NIX=./try-it-out/run-nix-ci.sh \
+            ./benchmarks/patch-rebuild.sh \
+              packages.x86_64-linux.dyndrv-openssl-baseline \
+              packages.x86_64-linux.dyndrv-openssl-patched \
+              | tee /tmp/openssl-checkpoint-d.log
+
+      - name: Record outcome in step summary
+        if: always()
+        run: |
+          {
+            echo "### openssl triage outcome"
+            echo ""
+            echo "Checkpoint B (accelerated build): ${{ steps.checkpoint_b.outcome }}"
+            if [[ "${{ steps.checkpoint_b.outcome }}" == "success" ]]; then
+              echo ""
+              echo "**Checkpoint B now PASSES** -- this contradicts the documented"
+              echo "NO-GO in benchmarks/RESULTS.md. A dyn-drvs fix likely landed --"
+              echo "update RESULTS.md and README.md's openssl row to reflect"
+              echo "Checkpoints C/D's real results."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # freetype is the only proven tier (benchmarks/RESULTS.md); zstd/mosh
+      # are open dyn-drvs bugs (nix/packages/{zstd,mosh}.nix) re-checked
+      # below as informational/non-blocking.
+      - name: Full benchmark suite (freetype, proven)
+        run: |
+          RUN_NIX=./try-it-out/run-nix-ci.sh \
+            ./benchmarks/patch-rebuild.sh \
+              packages.x86_64-linux.dyndrv-freetype packages.x86_64-linux.dyndrv-freetype
+
+      - name: "Blocked tiers re-check (informational, non-blocking): zstd, mosh"
+        continue-on-error: true
+        run: |
+          for attr in dyndrv-zstd dyndrv-mosh; do
+            echo "::group::Re-checking .#$attr (documented blocked, see nix/packages/$attr.nix)"
+            if RUN_NIX=./try-it-out/run-nix-ci.sh \
+                ./benchmarks/patch-rebuild.sh "packages.x86_64-linux.$attr" "packages.x86_64-linux.$attr" \
+                > "/tmp/$attr-nightly.log" 2>&1; then
+              echo "$attr: PASSED (unexpected -- a dyn-drvs fix may have landed, update RESULTS.md/README)" \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$attr: still blocked (see /tmp/$attr-nightly.log in job logs)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Push everything that actually built to Cachix
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          if [[ -z "${CACHIX_AUTH_TOKEN:-}" ]]; then
+            echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
+            exit 0
+          fi
+          for attr in dyndrv-freetype dyndrv-openssl-baseline; do
+            OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
+            [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
+          done
