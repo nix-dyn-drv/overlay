@@ -8,6 +8,9 @@ on:
 env:
   CACHIX_CACHE: dynamicderivations
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build + benchmark across packages
