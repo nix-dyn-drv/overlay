@@ -17,7 +17,7 @@ Two mechanisms compared:
 |---|---|---|---|---|
 | openssl (~2200 TUs) | one-file patch (`crypto/mem.c`) | 2/2213 | -- | From nixgg's README; not re-measured here. |
 | openssl | version bump (3.6.3->3.5.7) | 2153/2192 (98%) | -- | Version baked into `opensslv.h`, included nearly everywhere. |
-| zstd | cold build | -- | -- | Pending first measurement (gen_html self-exec fix via `extraPhase1Attrs`). |
+| openssl, hello, mosh, zstd | cold build | -- | -- | All four build cleanly end to end in CI (`.github/workflows/ci.yml`, real `/nix/store`, real per-TU `tu-*.o.drv` derivations submitted). |
 
 ## dyn-drvs mechanism (`accelerate.mkAcceleratedStdenv`)
 
