@@ -5,7 +5,7 @@ on:
     - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
   workflow_dispatch: {}
   push:
-    branches: [master]
+    branches: [main]
 
 env:
   CACHIX_CACHE: dynamicderivations
