@@ -100,6 +100,11 @@
           # freetype is dyn-drvs' own example; giflib/tree/figlet/nnn are
           # new and clean. zstd/mosh/openssl/tinycbor are new and each
           # hit a distinct open dyn-drvs bug, see nix/packages/*.nix.
+          # dyndrv-freetype-baseline: plain, unaccelerated freetype --
+          # the real comparison point for benchmarks/patch-rebuild.sh
+          # (dyndrv-freetype alone isn't a valid plain/accelerated pair).
+          dyndrv-freetype-baseline = pkgs.freetype;
+
           dyndrv-freetype =
             (import (inputs.dyndrv.outPath + "/try-it-out/examples/07-accelerate-real-package.nix") {
               inherit pkgs;

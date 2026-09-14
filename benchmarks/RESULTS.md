@@ -23,7 +23,7 @@ Two mechanisms compared:
 
 | Package | Scenario | TUs rebuilt | Wall-clock (plain vs accelerated) | Speedup | Notes |
 |---|---|---|---|---|---|
-| freetype (~45 TUs) | one-file patch | 2/45 | 4.43s vs 78.86s | **0.06x (17x slower)** | `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (known loss, dyn-drvs BASELINE.md). |
+| freetype (~45 TUs) | cold build | 93 registered | 11.8-11.9s vs 77-81s | **0.15x (~6.7x slower)** | Re-measured directly in this repo (`benchmarks/patch-rebuild.sh dyndrv-freetype-baseline dyndrv-freetype`, two runs, both ~0.15x). `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (same conclusion as dyn-drvs' own BASELINE.md, but that repo's 17x/0.06x figure is a DIFFERENT scenario -- a one-file patch rebuild, not a cold build -- and was never itself re-verified here; the CI benchmark step that was supposed to produce this repo's own patch-rebuild number had a bug comparing `dyndrv-freetype` against itself, fixed alongside this remeasurement). |
 | freetype | version bump (3 files) | 6/45 | 18.24s vs 52.01s | **0.35x** | Same cause, smaller magnitude (dyn-drvs number, not re-measured here). |
 | giflib | cold build | -- | pass | -- | `dyndrv-giflib` builds clean end to end. Plain Makefile, `ar`-based static lib -- no `cc`-driven link step, so it doesn't exercise the discoverTree link-step bug. |
 | tree | cold build | -- | pass | -- | `dyndrv-tree` builds clean end to end. Plain hand-written Makefile, no configure/cmake, real `bin/tree` verified runnable. |
@@ -137,8 +137,9 @@ enough to amortize the registration tax (~80ms/derivation for
 `nix derivation add`, per dyn-drvs' `registration-overhead.sh`). A 30-file
 synthetic library with real per-file compile weight shows a 2.90x win;
 the same mechanism against freetype's small, fast-compiling TUs shows a
-17x loss. Both TU count and per-unit compile cost matter -- wins and
-losses don't generalize by mechanism alone.
+~6.7x loss (measured directly here, cold build). Both TU count and
+per-unit compile cost matter -- wins and losses don't generalize by
+mechanism alone.
 
 ## How to reproduce
 

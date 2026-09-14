@@ -92,7 +92,7 @@ jobs:
         run: |
           RUN_NIX=./try-it-out/run-nix-ci.sh \
             ./benchmarks/patch-rebuild.sh \
-              packages.x86_64-linux.dyndrv-freetype packages.x86_64-linux.dyndrv-freetype
+              packages.x86_64-linux.dyndrv-freetype-baseline packages.x86_64-linux.dyndrv-freetype
 
       - name: "Blocked tiers re-check (informational, non-blocking): zstd, mosh"
         continue-on-error: true
