@@ -1,0 +1,179 @@
+name: Track nixpkgs-unstable
+
+on:
+  schedule:
+    - cron: "17 5 * * *" # daily, 05:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CACHIX_CACHE: dynamicderivations
+
+jobs:
+  bump-and-verify:
+    name: Bump nixpkgs, rebuild proven + blocked tiers, merge or PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash --noprofile --norc -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v15
+        with:
+          name: ${{ env.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN || '' }}
+
+      - name: Record current nixpkgs rev
+        id: before
+        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.root.inputs.nixpkgs as $n | .locks.nodes[$n].locked.rev')" >> "$GITHUB_OUTPUT"
+
+      - name: nix flake update nixpkgs
+        run: nix flake update nixpkgs
+
+      - name: Record new nixpkgs rev
+        id: after
+        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.root.inputs.nixpkgs as $n | .locks.nodes[$n].locked.rev')" >> "$GITHUB_OUTPUT"
+
+      - name: Skip -- nixpkgs unchanged
+        if: steps.before.outputs.rev == steps.after.outputs.rev
+        run: echo "nixpkgs already at ${{ steps.after.outputs.rev }}, nothing to do." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify run-nix-ci.sh can fetch+build a working Nix
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        run: ./try-it-out/run-nix-ci.sh --version
+
+      # Same hard gate as ci.yml: the proven tier must still build clean
+      # against the new pin, or this bump doesn't merge automatically.
+      - name: Build proven dyndrv packages against new nixpkgs (freetype, giflib, tree, figlet, nnn)
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        id: proven
+        continue-on-error: true
+        run: |
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/$attr.log"
+            echo "::endgroup::"
+          done
+
+      - name: Build nixgg-mechanism packages against new nixpkgs (openssl, hello, mosh, zstd)
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        id: nixgg
+        continue-on-error: true
+        run: |
+          for attr in openssl hello mosh zstd; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/nixgg-$attr.log"
+            echo "::endgroup::"
+          done
+
+      - name: Build nix-ninja and drowse mechanisms against new nixpkgs (argp-standalone, hello)
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        id: other-mechanisms
+        continue-on-error: true
+        run: |
+          for attr in nixninja-argp drowse-hello; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/$attr.log"
+            echo "::endgroup::"
+          done
+
+      # Informational only -- these are already-documented open bugs, so
+      # their outcome never blocks the merge decision below, just gets a
+      # note in the summary if one has newly started passing.
+      - name: Re-check blocked tiers against new nixpkgs (zstd, mosh, tinycbor, openssl)
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        continue-on-error: true
+        run: |
+          {
+            echo "### Blocked-tier status against new nixpkgs (see nix/packages/*.nix)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          for attr in dyndrv-zstd dyndrv-mosh dyndrv-tinycbor dyndrv-openssl; do
+            echo "::group::Attempting .#$attr (expected to fail, see nix/packages/$attr.nix)"
+            if ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
+                ".#$attr" > "/tmp/$attr.log" 2>&1; then
+              echo "$attr: PASSED (unexpected -- a dyn-drvs fix may have landed, update RESULTS.md/README)" \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$attr: still blocked (see /tmp/$attr.log in job logs)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Record decision in step summary
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        run: |
+          {
+            echo "### nixpkgs bump: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }}"
+            echo ""
+            echo "Proven tier (freetype, giflib, tree, figlet, nnn): ${{ steps.proven.outcome }}"
+            echo "nixgg tier (openssl, hello, mosh, zstd): ${{ steps.nixgg.outcome }}"
+            echo "nix-ninja/drowse tier (argp-standalone, hello): ${{ steps.other-mechanisms.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Green: the whole point of tracking a rolling channel is proving we
+      # keep up with it automatically, so commit straight to main -- no
+      # human needed when nothing broke.
+      - name: Commit and push flake.lock (proven + nixgg + other-mechanisms tiers green)
+        if: >
+          steps.before.outputs.rev != steps.after.outputs.rev &&
+          steps.proven.outcome == 'success' &&
+          steps.nixgg.outcome == 'success' &&
+          steps.other-mechanisms.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git commit -m "nixpkgs: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }}
+
+          Auto-bumped by .github/workflows/nixpkgs-update.yml -- proven
+          (freetype, giflib, tree, figlet, nnn), nixgg (openssl, hello,
+          mosh, zstd), and nix-ninja/drowse (argp-standalone, hello)
+          tiers all rebuilt clean against the new pin."
+          git push origin HEAD:main
+
+      # Red: something broke against the new nixpkgs. Don't push straight
+      # to main -- open a PR instead so the regression is visible and the
+      # bump doesn't happen silently.
+      - name: Open a PR instead (a tier broke against the new pin)
+        if: >
+          steps.before.outputs.rev != steps.after.outputs.rev &&
+          (steps.proven.outcome != 'success' || steps.nixgg.outcome != 'success' || steps.other-mechanisms.outcome != 'success')
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: flake.lock
+          commit-message: |
+            nixpkgs: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }} (regression, needs review)
+          branch: nixpkgs-update-regression
+          title: "nixpkgs bump breaks a proven package: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }}"
+          body: |
+            Automatic nixpkgs bump found a regression against the new pin.
+
+            - Proven tier (freetype, giflib, tree, figlet, nnn): `${{ steps.proven.outcome }}`
+            - nixgg tier (openssl, hello, mosh, zstd): `${{ steps.nixgg.outcome }}`
+            - nix-ninja/drowse tier (argp-standalone, hello): `${{ steps.other-mechanisms.outcome }}`
+
+            See the workflow run's step summary and job logs for details.
+            Not merged automatically since a previously-clean tier broke.
+
+      - name: Push everything that actually built to Cachix
+        if: steps.before.outputs.rev != steps.after.outputs.rev
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          if [[ -z "${CACHIX_AUTH_TOKEN:-}" ]]; then
+            echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
+            exit 0
+          fi
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn nixninja-argp drowse-hello; do
+            OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
+            [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
+          done

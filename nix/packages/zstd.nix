@@ -1,6 +1,8 @@
 # zstd built with dyn-drvs' `accelerate.mkAcceleratedStdenv` (cmake, unlike
-# freetype's autotools). Two build-breaking bugs found and fixed below; one
-# dyn-drvs concurrency bug found and left open.
+# freetype's autotools). Two build-breaking bugs found and fixed below.
+# The original link-step bug (empty inputs.drvs on a cc-driven link) is
+# now fixed upstream (dyn-drvs commit 26cf7b9); zstd still hits a
+# different, still-open cmake-source-path bug (see below).
 #
 # 1. gen_html mid-build self-exec. `build/cmake/contrib/CMakeLists.txt`
 #    unconditionally `add_subdirectory(gen_html)`; its
@@ -29,32 +31,15 @@
 #    `OFF` via `-D...:INTERNAL=OFF` -- `check_*_compiler_flag` skips its
 #    probe once the cache var is already set.
 #
-# 3. OPEN, ROOT-CAUSED: link steps invoked via the `cc`/`c++` shim (not
-#    `ar`) lose their `.o` inputs. `mkAcceleratedStdenv`'s `cc`/`c++`
-#    shims always use `discoverTree` mode, even for a link invocation
-#    (no `-c` flag, `.o` files + `-o <exe>` as positional args) --
-#    `discoverTree`'s scan runs `cc <link-args> -M -MG` to find extra
-#    header/source paths to stage, but `-M` on `.o` positional inputs
-#    makes gcc treat them as unused linker input and print NOTHING
-#    (verified directly: `gcc foo.o -M -MG` exits 0 with empty stdout).
-#    `discoverTree` mode also skips the "rewrite each relative argv path
-#    to its own resolved store path" step other builders' link/ar steps
-#    rely on (see wrapCommand.nix: that rewrite is "SKIPPED entirely"
-#    when `discoverTree` is active). Net effect: a `cc`-driven link
-#    step's `.o` inputs are neither staged into its tree nor rewritten
-#    to real paths -- its outer derivation ends up with an EMPTY
-#    `inputs.drvs` (confirmed via `nix derivation show` on
-#    `dyndrv-tests_fullbench.drv`) and links against whatever `dyndrv-
-#    tree` snapshot happens to be in scope, which may be empty or stale.
-#    autotools/libtool builds (freetype, mosh) mostly link via `ar`
-#    (their own separate, non-discoverTree shim) rather than `cc`
-#    directly, which is likely why this never surfaced there. cmake's
-#    generated Makefiles link executables straight through `cc`/`c++`,
-#    hitting this directly. `benchmarks/RESULTS.md` is marked BLOCKED
-#    until dyn-drvs fixes discoverTree to handle a link invocation's
-#    positional `.o`/`.a` inputs (skip the `-M -MG` scan when
-#    `hasCompileFlag` is false, and fall back to the ordinary per-file
-#    rewrite for those inputs instead).
+# 3. OPEN, ROOT-CAUSED: cmake-source-path bug. Every real per-TU compile
+#    (`lib/`, `programs/`, `tests/`, `contrib/pzstd/`) fails with
+#    `cc1: fatal error: /build/source/<own-source-file>: No such file
+#    or directory` -- discoverTree's per-TU sandbox never stages the
+#    primary source file itself. Same bug already documented against
+#    xxHash/re2/tinycbor's real recipe (see
+#    ~/dyn-drvs/docs/discovertree-cmake-source-path-bug.md); still open
+#    as of dyn-drvs 1e9610f. `benchmarks/RESULTS.md` is marked BLOCKED
+#    on this fix.
 
 {
   pkgs,
