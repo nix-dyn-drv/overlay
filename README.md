@@ -10,6 +10,13 @@ two different libraries:
 Full results, bugs found, and current status: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 Live benchmark dashboard: <https://nix-dyn-drv.github.io/overlay/benchmarks/dashboard/>
 
+This repo also tracks `nixpkgs-unstable` daily
+([`nixpkgs-update.yml`](.github/workflows/nixpkgs-update.yml)): a cron job
+bumps the pin, rebuilds every proven package against it, and auto-merges
+the bump only if nothing regressed — otherwise it opens a PR instead. The
+goal is proving these two mechanisms hold up against a real,
+constantly-moving target, not just a pinned snapshot.
+
 ## The headline number
 
 nixgg's mechanism rebuilds only 2 of openssl's 2213 translation units on
