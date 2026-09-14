@@ -1,5 +1,5 @@
 {
-  description = "Showcasing Nix dynamic derivations at nixpkgs scale, two mechanisms side by side";
+  description = "Showcasing Nix dynamic derivations at nixpkgs scale, four mechanisms side by side";
 
   nixConfig = {
     extra-experimental-features = [
@@ -24,6 +24,8 @@
       url = "github:tomberek/dyn-drvs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixNinja.url = "github:pdtpartners/nix-ninja";
+    drowse.url = "github:figsoda/drowse";
   };
 
   outputs =
@@ -153,6 +155,24 @@
             inherit pkgs;
             dyndrv = dyndrvLib;
             nixPackage = dyndrvPatchedNix;
+          };
+
+          # nix-ninja mechanism: a drop-in `ninja` replacement translating a
+          # meson-generated build.ninja's real build graph into dynamic
+          # derivations. Third, independent implementation of the same
+          # builtins.outputOf/builder-rpc-v0 primitive nixgg/dyndrv use.
+          nixninja-argp = import ./nix/packages/nixninja-argp.nix {
+            inherit pkgs;
+            nixNinjaFlake = inputs.nixNinja;
+          };
+
+          # drowse mechanism: defers a whole package's EVALUATION into a
+          # nested nix-instantiate (recursive-nix), not a per-TU build
+          # split -- the "avoid IFD" half of dynamic derivations, distinct
+          # from nixgg/dyndrv/nix-ninja's per-TU/per-checkpoint splitting.
+          drowse-hello = import ./nix/packages/drowse-hello.nix {
+            inherit pkgs;
+            drowse = inputs.drowse.lib.${system};
           };
 
           # Split into three attrs since a flake package must be a

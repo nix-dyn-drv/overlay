@@ -50,6 +50,18 @@ jobs:
             echo "::endgroup::"
           done
 
+      # nix-ninja (mkMesonPackage) and drowse (callPackage) are two more
+      # independent dynamic-derivations mechanisms, same patched-Nix path
+      # as the dyn-drvs tier above.
+      - name: Build nix-ninja and drowse mechanisms (argp-standalone, hello)
+        run: |
+          for attr in nixninja-argp drowse-hello; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/$attr.log"
+            echo "::endgroup::"
+          done
+
       # nixgg-mechanism coverage: openssl, hello, mosh, zstd all build via
       # plain stdenv override, but need nixgg's own patched-nix + feature
       # flags (see run-nixgg-ci.sh) -- the ambient daemon lacks
@@ -159,7 +171,7 @@ jobs:
           done
           OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
           echo "$OUT" | cachix push "$CACHIX_CACHE"
-          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
+          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn nixninja-argp drowse-hello; do
             OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done

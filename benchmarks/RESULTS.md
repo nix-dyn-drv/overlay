@@ -3,13 +3,26 @@
 Numbers this repo's README cites. All measured on a specific machine;
 losses are reported alongside wins.
 
-Two mechanisms compared:
+Four mechanisms compared, all implementing the same underlying Nix
+feature (`builtins.outputOf`, dynamic derivations) independently:
 
 - **nixgg's `splitStdenv`/`dynDrvStdenv`** -- Go-based shim, already proven
   at nixpkgs scale (`openssl`/`openssl-3_5`/`hello`/`mosh`/`zstd` outputs).
 - **dyn-drvs' `accelerate.mkAcceleratedStdenv`** -- Nix-language library
   (`dyndrv-*` outputs). See `nix/packages/*.nix` headers for per-package
   status.
+- **nix-ninja's `mkMesonPackage`** -- a drop-in `ninja` replacement
+  (`$NINJA=nix-ninja`) that turns a meson-generated `build.ninja`'s real
+  build graph into dynamic derivations (`nixninja-argp` output). Doesn't
+  override an existing package's stdenv like the other three -- it
+  reconstructs the meson invocation directly from `src`/
+  `nativeBuildInputs`/a ninja target name, since `mkMesonPackage` isn't
+  exported as a `lib` output.
+- **drowse's `callPackage`** -- defers a whole package's *evaluation*
+  into a nested `nix-instantiate` (via `recursive-nix`), not a per-TU
+  *build* split like the other three (`drowse-hello` output). The "avoid
+  IFD" half of the dynamic-derivations story, distinct from fine-grained
+  build splitting.
 
 ## nixgg mechanism (`splitStdenv`)
 
@@ -36,6 +49,18 @@ Two mechanisms compared:
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
 | openssl | Checkpoint D (patch rebuild count) | -- | NOT REACHED | -- | Gated on C. |
+
+## nix-ninja mechanism (`mkMesonPackage`)
+
+| Package | Scenario | Notes |
+|---|---|---|
+| argp-standalone (meson, 7 C files) | cold build | `nixninja-argp` builds real `libargp.a`, verified via `ar t` listing all 7 real `.o` translation units. No configure script, no cmake -- meson+ninja only, closest analog to giflib/tree/figlet's "plain build system" simplicity. |
+
+## drowse mechanism (`callPackage`)
+
+| Package | Scenario | Notes |
+|---|---|---|
+| hello | cold build | `drowse-hello` builds a real, runnable `bin/hello` (verified: prints "Hello, world!"). Uses drowse's own tested example (`tests/hello.nix`) verbatim. Distinct mechanism from the other three: defers the whole package's *evaluation* into a nested `nix-instantiate` (recursive-nix), rather than splitting an already-evaluated package's *build* into checkpoints -- demonstrating "avoid IFD" rather than "fine-grained per-TU caching." |
 
 ## Findings fed back to dyn-drvs
 
