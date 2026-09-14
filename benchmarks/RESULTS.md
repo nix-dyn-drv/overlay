@@ -26,6 +26,9 @@ Two mechanisms compared:
 | freetype (~45 TUs) | one-file patch | 2/45 | 4.43s vs 78.86s | **0.06x (17x slower)** | `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (known loss, dyn-drvs BASELINE.md). |
 | freetype | version bump (3 files) | 6/45 | 18.24s vs 52.01s | **0.35x** | Same cause, smaller magnitude (dyn-drvs number, not re-measured here). |
 | giflib | cold build | -- | pass | -- | `dyndrv-giflib` builds clean end to end. Plain Makefile, `ar`-based static lib -- no `cc`-driven link step, so it doesn't exercise the discoverTree link-step bug. |
+| tree | cold build | -- | pass | -- | `dyndrv-tree` builds clean end to end. Plain hand-written Makefile, no configure/cmake, real `bin/tree` verified runnable. |
+| figlet | cold build | -- | pass | -- | `dyndrv-figlet` builds clean end to end. Plain hand-written Makefile, no configure/cmake, real `bin/figlet` verified runnable. |
+| nnn | cold build | -- | pass | -- | `dyndrv-nnn` builds clean end to end, including nixpkgs' `makeWrapper`-generated shell shim. Plain hand-written Makefile, no configure/cmake. |
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
@@ -119,6 +122,13 @@ flake outputs; not package-fixable at this layer):
   invocation that dyn-drvs doesn't track or stage back -- only the
   primary `-o` output round-trips out of the per-TU sandbox. Independently
   reproduced. Extremely common pattern across autotools C/C++ projects.
+
+Eight for eight of the packages above hit an autotools- or cmake-shaped
+bug. The common factor in every actual PASS so far (giflib, tree,
+figlet, nnn) is a plain, hand-written Makefile with no `configure`
+script and no cmake -- the autotools depcomp idiom and cmake's
+generated build systems are both, independently, landmines for this
+mechanism as currently implemented.
 
 ## The break-even lesson
 

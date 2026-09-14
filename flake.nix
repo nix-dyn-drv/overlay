@@ -97,9 +97,9 @@
             };
 
           # dyndrv mechanism (accelerate.mkAcceleratedStdenv / phases.split).
-          # freetype is dyn-drvs' own example; giflib is new and clean.
-          # zstd/mosh/openssl/tinycbor are new and each hit a distinct
-          # open dyn-drvs bug, see nix/packages/*.nix.
+          # freetype is dyn-drvs' own example; giflib/tree/figlet/nnn are
+          # new and clean. zstd/mosh/openssl/tinycbor are new and each
+          # hit a distinct open dyn-drvs bug, see nix/packages/*.nix.
           dyndrv-freetype =
             (import (inputs.dyndrv.outPath + "/try-it-out/examples/07-accelerate-real-package.nix") {
               inherit pkgs;
@@ -109,6 +109,24 @@
             }).accelerated;
 
           dyndrv-giflib = import ./nix/packages/giflib.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-tree = import ./nix/packages/tree.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-figlet = import ./nix/packages/figlet.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-nnn = import ./nix/packages/nnn.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
             nixPackage = dyndrvPatchedNix;

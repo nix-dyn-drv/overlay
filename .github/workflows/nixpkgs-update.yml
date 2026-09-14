@@ -49,12 +49,12 @@ jobs:
 
       # Same hard gate as ci.yml: the proven tier must still build clean
       # against the new pin, or this bump doesn't merge automatically.
-      - name: Build proven dyndrv packages against new nixpkgs (freetype, giflib)
+      - name: Build proven dyndrv packages against new nixpkgs (freetype, giflib, tree, figlet, nnn)
         if: steps.before.outputs.rev != steps.after.outputs.rev
         id: proven
         continue-on-error: true
         run: |
-          for attr in dyndrv-freetype dyndrv-giflib; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/$attr.log"
@@ -157,7 +157,7 @@ jobs:
             echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
             exit 0
           fi
-          for attr in dyndrv-freetype dyndrv-giflib; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
             OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done

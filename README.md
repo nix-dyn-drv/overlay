@@ -20,12 +20,15 @@ constantly-moving target, not just a pinned snapshot.
 ## The headline number
 
 nixgg's mechanism rebuilds only 2 of openssl's 2213 translation units on
-a one-line patch. dyn-drvs' mechanism builds clean on freetype and
-giflib, but freetype's patch-rebuild is 17x *slower* than a plain
-rebuild — per-TU acceleration only pays off when each unit costs more to
-compile than the ~80ms registration overhead. A wider survey against
-eight more real nixpkgs packages found five more distinct dyn-drvs bugs
-beyond the four already documented; see `benchmarks/RESULTS.md`.
+a one-line patch. dyn-drvs' mechanism builds clean on freetype, giflib,
+tree, figlet, and nnn, but freetype's patch-rebuild is 17x *slower* than
+a plain rebuild — per-TU acceleration only pays off when each unit costs
+more to compile than the ~80ms registration overhead. A wider survey
+against eight more real nixpkgs packages found five more distinct
+dyn-drvs bugs beyond the four already documented — every failure traced
+back to either autotools' dependency-tracking idiom or cmake's generated
+build systems, while every clean pass used a plain, hand-written
+Makefile; see `benchmarks/RESULTS.md`.
 
 ## Quickstart
 
