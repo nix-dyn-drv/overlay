@@ -37,8 +37,9 @@
   <a href="https://github.com/tomberek/nixgg">nixgg</a>'s mechanism rebuilds only
   <strong>2 of openssl's 2213 translation units</strong> on a one-line patch.
   <a href="https://github.com/tomberek/dyn-drvs">dyn-drvs</a>' mechanism builds clean
-  on freetype, giflib, tree, figlet, and nnn, but freetype's patch-rebuild is
-  <strong>17x slower</strong> than a plain rebuild. Per-TU acceleration only pays off
+  on freetype, giflib, tree, figlet, and nnn, but freetype's cold build is
+  <strong>~6.7x slower</strong> than a plain rebuild (measured directly in this repo).
+  Per-TU acceleration only pays off
   when each compile unit costs more than the ~80ms registration overhead it adds.
   A wider survey found every dyn-drvs failure traces back to either autotools'
   dependency-tracking idiom or cmake's generated build systems — every clean
@@ -50,7 +51,7 @@
   <tr><th>Package</th><th>Mechanism</th><th>Status</th><th>Notes</th></tr>
   <tr><td>openssl</td><td>nixgg</td><td class="win">win</td><td>2/2213 TUs rebuilt on a one-line patch</td></tr>
   <tr><td>hello, mosh, zstd</td><td>nixgg</td><td class="win">works</td><td>build cleanly end to end</td></tr>
-  <tr><td>freetype</td><td>dyn-drvs</td><td class="loss">loss</td><td>17x slower — too little per-TU compile cost</td></tr>
+  <tr><td>freetype</td><td>dyn-drvs</td><td class="loss">loss</td><td>~6.7x slower — too little per-TU compile cost</td></tr>
   <tr><td>giflib, tree, figlet, nnn</td><td>dyn-drvs</td><td class="win">works</td><td>plain hand-written Makefile, no configure/cmake</td></tr>
   <tr><td>zstd, tinycbor</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>cmake-driven builds hit discoverTree bugs (link-step / source-path)</td></tr>
   <tr><td>mosh</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>autoreconfHook</code>'s phase gets dropped</td></tr>
