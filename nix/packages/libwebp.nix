@@ -1,4 +1,4 @@
-# libwebp -- BLOCKED. Single-output (`out`), cmake-based, ~171 TUs -- picked
+# libwebp -- PASS. Single-output (`out`), cmake-based, ~171 TUs -- picked
 # specifically to avoid the multi-output gaps hit elsewhere (openssl's
 # `finalPackage`, libpng/libtasn1's `outputBin`).
 #
@@ -13,28 +13,34 @@
 # per-TU compile across every one of libwebp's cmake targets now
 # succeeds (no more "No such file or directory" for any TU).
 #
-# NOW BLOCKED by a different, new bug, at the archive step: `ar: /nix/
+# THEN blocked by a second, distinct bug at the archive step: `ar: /nix/
 # store/<hash>-example_util.c.o: No such file or directory` /
 # `ranlib: '/nix/store/<hash>-dyndrv-libexampleutil_a': No such file`
 # (also reproduced against a different object on a second run,
-# `image_dec.c.o`). `nix derivation show` on the failing `.drv` confirms
-# `inputs.drvs = {}` -- the compiled `.o`'s producing derivation is never
-# wired as a real build dependency, only referenced as a literal
-# store-path string in `args`, so Nix schedules/builds the `ar` step
-# before (or without ever building) its object-file dependency. This
-# looks like a cross-unit dependency-wiring gap in
-# `nix/lib/shim/collectStubs.nix` (the generic dependency-discovery/
-# unit-merging pass), distinct from both the now-fixed cmake-source-path
-# bug and the separately-fixed ar/ranlib probe-crash bug (227b1a6) --
-# this is a real static-lib link with real inputs, not a version probe.
+# `image_dec.c.o`). `nix derivation show` on the failing `.drv` confirmed
+# `inputs.drvs = {}` -- `ar`'s own positional `.o` inputs were never
+# scanned for resolved store paths the way `ccToNode`'s `extraStorePaths`
+# already did. FIXED upstream in dyn-drvs 28af81d ("Fix ar shim: declare
+# its own real .o/archive inputs as derivation deps") -- confirmed
+# directly: all `ar`/`ranlib` archive steps now succeed for real.
 #
-# Not package-fixable at this layer (the dependency-wiring gap is in how
-# collectStubs resolves `ar`'s own positional `.o` inputs into real
-# `inputs.drvs`, not something libwebp's own cmake project controls).
-# Left here (not deleted) as real forward progress from the original
-# cmake-source-path bug, now confirmed a fourth instance of THIS
-# different ar/ranlib dependency-wiring bug (also seen on x265,
-# openjpeg).
+# THEN blocked by a third, distinct bug at a `cc -shared` link step:
+# `ld.bfd: cannot open dependency file CMakeFiles/webpdecoder.dir/
+# link.d: No such file or directory` -- wrapCommand's output-dirname
+# precreation logic didn't unglue `-Wl,`-style flags before scanning
+# argv for an output directory to precreate, so a linker dependency-file
+# path glued onto a `-Wl,` flag never got its containing directory made.
+# FIXED upstream in dyn-drvs dc07a0a ("Fix wrapCommand's output-dirname
+# precreation: unglue -Wl,-style flags first (task #142)") -- confirmed
+# directly: `dyndrv-libwebp` now builds clean end to end, real
+# `libwebp.so.7.2.0`/`bin/cwebp`/`bin/dwebp` etc all verified as genuine
+# ELF binaries.
+#
+# Left the full bug history here (not deleted) since this package
+# exercised three DISTINCT, sequentially-uncovered dyn-drvs bugs on the
+# way to a real pass -- each fix exposed the next real bug rather than
+# recurring, which is itself informative about how deep this mechanism's
+# rough edges go on an ordinary cmake C project.
 
 {
   pkgs,
