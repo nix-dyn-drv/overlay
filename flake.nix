@@ -165,6 +165,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-libwebp = import ./nix/packages/libwebp.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-openjpeg = import ./nix/packages/openjpeg.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
