@@ -12,6 +12,28 @@
 # through cleanly, see finding 2's own note on why), and a real,
 # runnable `bin/x264` (`x264 --version` prints "x264 0.165.x ..."),
 # confirmed directly against this repo's own build.
+#
+# RETESTED after dyn-drvs 227b1a6 ("Fix ar/ranlib shims crashing/
+# misclassifying on version-probe invocations") and 97a987d ("Fix
+# discoverTree: cmake's -MT/-MF values misidentified as the source
+# file") landed upstream: still PASS, and BOTH package-level
+# workarounds below are STILL REQUIRED -- neither fix subsumes them.
+# 227b1a6's own `isProbe` heuristic (`ranlibToNode`/`arToNode`: "a
+# probe has no non-flag positional argument at all") only covers the
+# plain `ar --version`/`ranlib --version` shape its own regression
+# fixture (example 23) reproduces. x264's actual probe is
+# `${cross_prefix}gcc-ranlib --plugin <path-to-liblto_plugin.so>
+# --version` (see finding 1 below) -- `--plugin`'s OWN VALUE (an
+# absolute store path, not a flag) is itself a non-flag positional
+# argument, so `isProbe` evaluates to `false` for this exact
+# invocation and finding 1's original failure mode (a bogus,
+# unsatisfiable `dyndrv-__version` stub, "No such file") still
+# reproduces byte-for-byte when the `postPatch` below is removed --
+# confirmed by direct reproduction against this repo's own build,
+# rebuilt with dyndrv bumped to include both fixes. Finding 2 is
+# unrelated to either fix (it's about `phases.split`'s single-output
+# restore path, not `ar`/`ranlib` shims or `discoverTree`) and remains
+# open/unaffected as well.
 
 {
   pkgs,
