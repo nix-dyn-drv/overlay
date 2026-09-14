@@ -45,6 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
+| dav1d | cold build | **BLOCKED** | -- | -- | First meson-based package tried against `accelerate.mkAcceleratedStdenv`. Fails during `configurePhase`, before any real TU compiles: `meson.build:25:0: ERROR: Unknown linker(s): [['ar']]`. Root cause: meson's own linker-detection probe runs `ar --version`; `arToNode`'s shim has NO probe/passthrough case at all (unlike `cc`'s `isConftest`/`isCMakeProbe`/`isInfoQuery`) and unconditionally assumes argv[0]/argv[1] are modifiers/archive-path, so a 1-arg probe makes `len - 2 = -1` and `builtins.genList` throws `cannot create list of size -1` -- confirmed by extracting and running the real generated `ar` wrapper standalone. A new bug, distinct from the five already documented; no package-level workaround exists (meson's probe is unconditional). Details in `nix/packages/dav1d.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -64,7 +65,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Four bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Five bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -92,6 +93,14 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`ar` shim has no probe/passthrough case at all** (dav1d) --
+   `arToNode` unconditionally treats argv[0]/argv[1] as
+   modifiers/archive-path with no exception, unlike `cc`'s own
+   `isConftest`/`isCMakeProbe`/`isInfoQuery` passthrough logic. meson's
+   own unconditional `ar --version` linker-detection probe (a 1-arg
+   invocation) makes its `len - 2` input count negative, crashing
+   `builtins.genList` outright (`cannot create list of size -1`) before
+   any real TU compiles. First meson-based package tried here.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README

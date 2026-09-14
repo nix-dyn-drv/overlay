@@ -30,15 +30,18 @@ acceleration only pays off when each unit costs more to compile than the
 nixpkgs packages found five more distinct dyn-drvs bugs beyond the four
 already documented — every failure traced back to either autotools'
 dependency-tracking idiom or cmake's generated build systems, while
-every clean pass used a plain, hand-written Makefile. Two more
-independent libraries, nix-ninja and drowse, each demonstrate a
-genuinely different angle on the same underlying feature: nix-ninja
-turns a meson-generated `build.ninja`'s real build graph into per-TU
-derivations (`nixninja-argp`, real `libargp.a` verified); drowse defers
-a whole package's *evaluation* into a nested `nix-instantiate` instead
-of splitting its *build* (`drowse-hello`, real runnable `hello` binary)
-— the "avoid IFD" half of the story, not fine-grained caching. See
-`benchmarks/RESULTS.md`.
+every clean pass used a plain, hand-written Makefile. dav1d (meson, the
+first meson-based package tried) found a sixth: meson's own unconditional
+`ar --version` linker-detection probe crashes the `ar` shim outright
+(`arToNode` has no probe/passthrough case at all, unlike `cc`'s), before
+any real TU ever compiles. Two more independent libraries, nix-ninja and
+drowse, each demonstrate a genuinely different angle on the same
+underlying feature: nix-ninja turns a meson-generated `build.ninja`'s
+real build graph into per-TU derivations (`nixninja-argp`, real
+`libargp.a` verified); drowse defers a whole package's *evaluation* into
+a nested `nix-instantiate` instead of splitting its *build*
+(`drowse-hello`, real runnable `hello` binary) — the "avoid IFD" half of
+the story, not fine-grained caching. See `benchmarks/RESULTS.md`.
 
 ## Quickstart
 
