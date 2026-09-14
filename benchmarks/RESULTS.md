@@ -29,6 +29,7 @@ Two mechanisms compared:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
+| openjpeg (~76 TUs, cmake, 2-output) | cold build | -- | **BLOCKED** | -- | Real, sandboxed cold build attempted (`./try-it-out/run-nix.sh build --impure --no-link --print-out-paths .#dyndrv-openjpeg`). Configure-time `try_compile` probes (`TestBigEndian`/`CheckTypeSize`) initially failed too, but that turned out to be a stale `dyndrv` flake input pin, not a live bug -- `nix flake update dyndrv` fixed it, confirming this repo's own copy just needed the update. With that update, every real per-TU compile succeeds, but the first `ar`-driven static-lib link fails: `ar: /nix/store/<hash>-thread.c.o: No such file or directory`. `nix derivation show` on the registered `ar` derivation confirms `inputs.drvs = {}` -- none of its 22 real `.o` positional inputs (each another dynamic derivation's own output) are wired as a dependency at all; the identical gap hits the `cc -shared` link for `libopenjp2.so` too. New dyn-drvs bug: `arToNode`/`ranlibToNode` never scan their own positional args for resolved store paths the way `ccToNode`'s `extraStorePaths` already does. See `nix/packages/openjpeg.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -36,7 +37,7 @@ Two mechanisms compared:
 
 ## Findings fed back to dyn-drvs
 
-Four bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Five bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -64,6 +65,19 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
+   inputs as `inputs.drvs`** (openjpeg) -- unlike `ccToNode`'s
+   `extraStorePaths`/`findAllStorePaths` scan (which greps every argv
+   element for a literal store-path substring and folds it into the
+   deferred record's own `srcs`), neither the `ar` nor `ranlib` shim has
+   an equivalent scan over their own positional inputs. Once an earlier
+   compile's `.o` output resolves to a real store path, `ar`'s own
+   record never picks it up, so the registered `ar`/link derivation ends
+   up with an empty `inputs.drvs` and the sandbox has no access to a
+   `.o` it never declared (`ar: /nix/store/<hash>-thread.c.o: No such
+   file or directory`, confirmed via `nix derivation show`). Distinct
+   from bug #3 above (that fix only touched `cc`/`c++`'s own scan; `ar`/
+   `ranlib` are a separate code path that was never given one at all).
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
@@ -100,6 +114,11 @@ package-fixable at this layer):
   handling.
 - **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
   `libmpfr.so` link step, identical shape to pcre2).
+- **openjpeg: FAIL, new bug (#5 above).** See `dyndrv-openjpeg` in the
+  table above -- `arToNode`/`ranlibToNode` never wire their own `.o`
+  positional inputs as real `inputs.drvs`, so the first real static-lib
+  link fails outright once its inputs are genuinely resolved dynamic
+  derivations.
 
 ## The break-even lesson
 

@@ -17,8 +17,10 @@ a one-line patch. dyn-drvs' mechanism builds clean on freetype and
 giflib, but freetype's patch-rebuild is 17x *slower* than a plain
 rebuild — per-TU acceleration only pays off when each unit costs more to
 compile than the ~80ms registration overhead. A wider survey against
-xxHash/re2/libb64/mpfr/tinycbor found three more distinct dyn-drvs bugs
-beyond the four already documented; see `benchmarks/RESULTS.md`.
+xxHash/re2/libb64/mpfr/tinycbor/openjpeg found four more distinct
+dyn-drvs bugs beyond the four already documented, including a new
+`ar`/`ranlib`-specific missing-dependency-wiring bug on openjpeg; see
+`benchmarks/RESULTS.md`.
 
 ## Quickstart
 

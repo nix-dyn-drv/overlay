@@ -132,6 +132,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-openjpeg = import ./nix/packages/openjpeg.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           # Split into three attrs since a flake package must be a
           # derivation, not an attrset.
           dyndrv-openssl = dyndrvOpensslCheckpoints.accelerated;
