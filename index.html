@@ -36,10 +36,13 @@
 <p>
   <a href="https://github.com/tomberek/nixgg">nixgg</a>'s mechanism rebuilds only
   <strong>2 of openssl's 2213 translation units</strong> on a one-line patch.
-  <a href="https://github.com/tomberek/dyn-drvs">dyn-drvs</a>' mechanism, applied to
-  freetype, is <strong>17x slower</strong> than a plain rebuild. Per-TU acceleration
-  only pays off when each compile unit costs more than the ~80ms registration overhead
-  it adds.
+  <a href="https://github.com/tomberek/dyn-drvs">dyn-drvs</a>' mechanism builds clean
+  on freetype, giflib, tree, figlet, and nnn, but freetype's patch-rebuild is
+  <strong>17x slower</strong> than a plain rebuild. Per-TU acceleration only pays off
+  when each compile unit costs more than the ~80ms registration overhead it adds.
+  A wider survey found every dyn-drvs failure traces back to either autotools'
+  dependency-tracking idiom or cmake's generated build systems — every clean
+  pass used a plain, hand-written Makefile.
 </p>
 
 <h2>Current package status</h2>
@@ -48,8 +51,8 @@
   <tr><td>openssl</td><td>nixgg</td><td class="win">win</td><td>2/2213 TUs rebuilt on a one-line patch</td></tr>
   <tr><td>hello, mosh, zstd</td><td>nixgg</td><td class="win">works</td><td>build cleanly end to end</td></tr>
   <tr><td>freetype</td><td>dyn-drvs</td><td class="loss">loss</td><td>17x slower — too little per-TU compile cost</td></tr>
-  <tr><td>giflib</td><td>dyn-drvs</td><td class="win">works</td><td>plain Makefile, ar-based static lib</td></tr>
-  <tr><td>zstd</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>discoverTree</code> can't see cc-driven link steps</td></tr>
+  <tr><td>giflib, tree, figlet, nnn</td><td>dyn-drvs</td><td class="win">works</td><td>plain hand-written Makefile, no configure/cmake</td></tr>
+  <tr><td>zstd, tinycbor</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>cmake-driven builds hit discoverTree bugs (link-step / source-path)</td></tr>
   <tr><td>mosh</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>autoreconfHook</code>'s phase gets dropped</td></tr>
   <tr><td>openssl</td><td>dyn-drvs</td><td class="blocked">no-go</td><td>missing <code>finalAttrs.finalPackage</code></td></tr>
 </table>
@@ -57,14 +60,19 @@
 
 <h2>Bugs found in dyn-drvs</h2>
 <p>
-  Building this repo surfaced four real bugs in <code>accelerate.mkAcceleratedStdenv</code>,
-  each written up for upstream:
+  Building and surveying more real nixpkgs packages against this repo surfaced
+  nine distinct bugs in <code>accelerate.mkAcceleratedStdenv</code>, each written
+  up for upstream:
 </p>
 <ul>
-  <li><code>discoverTree</code>'s dependency scan can't see a link step's own inputs when the link is driven through <code>cc</code>/<code>c++</code> directly (cmake, libtool) — confirmed on zstd and pcre2.</li>
+  <li><code>discoverTree</code>'s dependency scan can't see a link step's own inputs when the link is driven through <code>cc</code>/<code>c++</code> directly (cmake, libtool) — confirmed on zstd, pcre2, mpfr; not universal (tinycbor's own <code>cc</code>-driven links build fine).</li>
   <li><code>autoreconfHook</code>'s dynamically-injected build phase gets silently dropped by a static phase list.</li>
   <li>CMake's compiler-flag probes aren't recognized as passthrough-eligible, so a deferred stub falsely reports success.</li>
   <li>The <code>finalAttrs.finalPackage</code> self-reference nixpkgs injects for ordinary packages is missing from the accelerated stdenv's own <code>mkDerivation</code>.</li>
+  <li>cmake builds can fail per-TU compiles with a source-not-found error — confirmed on xxHash, re2, and tinycbor's real (cmake-based) recipe.</li>
+  <li>A freshly-linked binary can lose its execute bit, breaking any Makefile that runs its own just-built binary as a self-test (libb64).</li>
+  <li><code>phases.split</code> forces single-output but doesn't clear an inherited <code>outputBin</code>/<code>outputMan</code> literal override (libpng, libtasn1).</li>
+  <li>Secondary compiler side-outputs (automake's <code>-MF</code> depfiles) don't survive the sandbox boundary, breaking the classic autotools depcomp idiom (gperf).</li>
 </ul>
 
 <h2>Run it yourself</h2>
