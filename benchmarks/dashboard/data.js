@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789349826315,
+  "lastUpdate": 1789351112327,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -202,6 +202,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.99,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "b3ed508980f68f76609b3fda7588f289f5b1ba18",
+          "message": "Add tree, figlet, nnn as new proven dyn-drvs packages\n\nThree more real nixpkgs packages confirmed building cleanly through\naccelerate.mkAcceleratedStdenv, found by prioritizing plain\nhand-written-Makefile packages (no configure, no cmake) after the\nprior survey showed autotools' depcomp idiom and cmake's generated\nbuild systems are both reliable landmines for this mechanism. All\nthree independently spot-checked, tree/figlet directly against this\nrepo's pinned nixpkgs; nnn's build also re-verified locally.\n\nWired into flake.nix, ci.yml's hard-gate proven tier, and\nnixpkgs-update.yml's rebuild-and-bump gate, alongside RESULTS.md/README\nupdates.",
+          "timestamp": "2026-09-13T21:44:27-04:00",
+          "tree_id": "bba653210b50e7249b7ce3f0f50845b4927eac72",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/b3ed508980f68f76609b3fda7588f289f5b1ba18"
+        },
+        "date": 1789351111271,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 1,
             "unit": "x"
           }
         ]
