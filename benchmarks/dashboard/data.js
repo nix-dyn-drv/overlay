@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789412003452,
+  "lastUpdate": 1789416726348,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -579,6 +579,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.58,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6403e45875627a6721a554c2ffa47d0080752996",
+          "message": "Merge pull request #4 from nix-dyn-drv/libwebp-package\n\nAdd libwebp (cmake, ~171 TUs, single-output) -- PASS, fixed upstream by 97a987d + 28af81d + dc07a0a",
+          "timestamp": "2026-09-14T15:57:34-04:00",
+          "tree_id": "08d5494e2ef4d5a460e9c0ff8df93a977e3986e1",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/6403e45875627a6721a554c2ffa47d0080752996"
+        },
+        "date": 1789416725173,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.56,
             "unit": "x"
           }
         ]
