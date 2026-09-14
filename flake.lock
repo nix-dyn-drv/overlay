@@ -59,11 +59,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1789375101,
-        "narHash": "sha256-kx+vaCq0CpDvDB05IHgqWY+S2RMAcfK7dQ1ipUyg+Ps=",
+        "lastModified": 1789399290,
+        "narHash": "sha256-J7quurCNh0Gbrc1bDo5uIydMsuDmo50EKeDznsG+64Y=",
         "owner": "tomberek",
         "repo": "dyn-drvs",
-        "rev": "0d233d3e424b93068ee5ba1335e86f29d0bbf364",
+        "rev": "dc07a0a5d5c2104f52f73b088693994145841684",
         "type": "github"
       },
       "original": {
