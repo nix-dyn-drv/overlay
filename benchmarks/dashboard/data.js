@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789395490383,
+  "lastUpdate": 1789397198049,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -434,6 +434,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.67,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": false,
+          "id": "542cb0c26e2b3218367ee1a7dde6bd59a8bf71ad",
+          "message": "Merge pull request #7 from nix-dyn-drv/capnproto-package-2\n\nAdd capnproto (cmake, ~187 .c++ TUs) -- PASS, fixed by dyn-drvs 0d233d3 (retest)",
+          "timestamp": "2026-09-14T10:26:55-04:00",
+          "tree_id": "225234f6b4cd7794970d060a9a1800cc5dc86b71",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/542cb0c26e2b3218367ee1a7dde6bd59a8bf71ad"
+        },
+        "date": 1789397197066,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.81,
             "unit": "x"
           }
         ]
