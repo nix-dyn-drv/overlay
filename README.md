@@ -86,3 +86,4 @@ uses `run-nix-ci.sh`, which points the same Nix at the real `/nix/store`
 — safe there since each job gets its own VM.
 
 [pr-15793]: https://github.com/NixOS/nix/pull/15793
+
