@@ -30,14 +30,14 @@ jobs:
 
       - name: Record current nixpkgs rev
         id: before
-        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.nixpkgs.locked.rev')" >> "$GITHUB_OUTPUT"
+        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.root.inputs.nixpkgs as $n | .locks.nodes[$n].locked.rev')" >> "$GITHUB_OUTPUT"
 
       - name: nix flake update nixpkgs
         run: nix flake update nixpkgs
 
       - name: Record new nixpkgs rev
         id: after
-        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.nixpkgs.locked.rev')" >> "$GITHUB_OUTPUT"
+        run: echo "rev=$(nix flake metadata --json | jq -r '.locks.nodes.root.inputs.nixpkgs as $n | .locks.nodes[$n].locked.rev')" >> "$GITHUB_OUTPUT"
 
       - name: Skip -- nixpkgs unchanged
         if: steps.before.outputs.rev == steps.after.outputs.rev
