@@ -8,11 +8,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1789326186,
-        "narHash": "sha256-Luqq/qBjqmVtd0fL8MAt9sxl5XoPE2bvyA3eNFqv7pI=",
+        "lastModified": 1789334336,
+        "narHash": "sha256-n9YlLAKCkJoqb6jCsKsM/MHCcMlIgfF+bVo7QqXfwvc=",
         "owner": "tomberek",
         "repo": "dyn-drvs",
-        "rev": "dc6dc0a22514ba7c5ae231948c5d90a589803dae",
+        "rev": "2024a4125b8938fe1a0a15007fd9b5a7f8e5233a",
         "type": "github"
       },
       "original": {
