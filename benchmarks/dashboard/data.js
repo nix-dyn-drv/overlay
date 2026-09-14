@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789346544694,
+  "lastUpdate": 1789348657843,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -115,6 +115,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 1.01,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "0359c2bf2666b9f8023a88ac98cfb605bbe69239",
+          "message": "Add daily nixpkgs-unstable tracking workflow\n\nnixpkgs.url already points at nixpkgs-unstable (rolling), so \"keeping up\nwith a much larger system\" means auto-bumping flake.lock on a schedule\nand proving proven packages still build against the new pin -- not just\nfreezing at whatever revision happened to be locked.\n\nnixpkgs-update.yml: daily cron, nix flake update nixpkgs, rebuild the\nproven tier (freetype, giflib) and nixgg tier (openssl, hello, mosh,\nzstd). If both stay green, commit the lock bump straight to main --\nthat's the actual \"kept up automatically\" signal. If either regresses,\nopen a PR instead so the break is visible before it lands.",
+          "timestamp": "2026-09-13T21:06:06-04:00",
+          "tree_id": "5d23599c53ef60907409ffb984e2235c346ca21e",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/0359c2bf2666b9f8023a88ac98cfb605bbe69239"
+        },
+        "date": 1789348656954,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 1.08,
             "unit": "x"
           }
         ]
