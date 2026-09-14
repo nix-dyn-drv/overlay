@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789397198049,
+  "lastUpdate": 1789400266285,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -463,6 +463,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.81,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "d2f923180b7112d247c895f934a477ad2b8aa4b7",
+          "message": "Bump dyndrv to 2525772: fixes ar shim missing .o/archive inputs\n\nNew fix upstream: 28af81d (\"Fix ar shim: declare its own real .o/archive\ninputs as derivation deps\") -- this is the bug hitting libwebp, x265,\nand openjpeg's ar/ranlib archive steps (nix derivation show confirmed\ninputs.drvs = {} for those failing derivations). Also picks up\n2525772's own CI addition of the trynix action (unrelated to this\nrepo's own copy).\n\nVerified: giflib and capnproto still build clean against the new rev.\nRetesting libwebp/x265/openjpeg next.",
+          "timestamp": "2026-09-14T11:18:19-04:00",
+          "tree_id": "d2e033d81cbd795a73aed8d100cdfe692684733b",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/d2f923180b7112d247c895f934a477ad2b8aa4b7"
+        },
+        "date": 1789400265230,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.64,
             "unit": "x"
           }
         ]
