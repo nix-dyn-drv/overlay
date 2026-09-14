@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789356290866,
+  "lastUpdate": 1789366943176,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -289,6 +289,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "ed24f379f47eaa0ae0260bbe9b5f9bee4165f0ed",
+          "message": "Make nix-ninja informational in CI: intermittent real-/nix/store failure\n\nCI (real /nix/store via run-nix-ci.sh's sudo path) hit a failure that\ndidn't reproduce locally against the redirected alt-store: argp-standalone\nfails with PermissionError: [Errno 13] Permission denied: '/nonexistent'\nduring an \"Installing files\" ninja step that ran further than my local\nrepro's build graph did -- looks like ninja's own generated install rule\nexecuting and writing to mkMesonPackage's literal placeholder path, not\nyet root-caused (may be a real/alt-store sandboxing difference, or\nCI-specific timing/ordering). Marked continue-on-error so it doesn't\nblock regressions in drowse or the proven dyndrv tier alongside it.",
+          "timestamp": "2026-09-14T02:03:03-04:00",
+          "tree_id": "c0e60dfbd75921ef8562d13917d180c174ef2f7a",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/ed24f379f47eaa0ae0260bbe9b5f9bee4165f0ed"
+        },
+        "date": 1789366942669,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.67,
             "unit": "x"
           }
         ]
