@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789337554074,
+  "lastUpdate": 1789344335784,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -57,6 +57,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 1.01,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "26eded35872d0943a8c6b4bf7796990b061fd7c0",
+          "message": "Add giflib as a second proven dyn-drvs package, simplify README\n\ngiflib (plain Makefile, ar-based static lib) builds cleanly with no\nworkarounds -- confirmed while investigating why pcre2/giflib initially\nappeared to fail (both were actually a missing nixPackage argument in\nthe test setup, not real bugs; pcre2 does hit the real discoverTree\nlink-step bug once nixPackage is fixed, confirming it's not cmake-specific).\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-09-13T19:52:14-04:00",
+          "tree_id": "d4747ee45751c112b53ca36a1ff1f123a137df58",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/26eded35872d0943a8c6b4bf7796990b061fd7c0"
+        },
+        "date": 1789344334876,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 1.02,
             "unit": "x"
           }
         ]
