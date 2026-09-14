@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789366943176,
+  "lastUpdate": 1789367284603,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -318,6 +318,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.67,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "f21ac6a2d5a06ef5b3a326cf90be864f66d84ff6",
+          "message": "Rewrite README around the actual goal: is dynamic derivations viable?\n\nThe old README led with mechanism names and a wall of numbers. Reframe\naround what this repo is actually for -- testing whether Nix's dynamic\nderivations feature holds up against real nixpkgs packages, not just\ntoy examples, and reporting the honest answer (wins and losses) rather\nthan just the best-case demo. Explains why four independent libraries\nare tested (isolates \"is the underlying Nix feature viable\" from \"does\nthis one library's design work\"), and states the actual finding in\nplain terms: it works dramatically on the right package shape, but has\nreal, current limits (cmake/automake patterns) that aren't universal\nyet -- with the upstream bug-reporting loop as part of the point, not\njust the benchmark numbers.",
+          "timestamp": "2026-09-14T02:12:26-04:00",
+          "tree_id": "23fce2d22f1cbc6848218343f4fd20a45c31bd14",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/f21ac6a2d5a06ef5b3a326cf90be864f66d84ff6"
+        },
+        "date": 1789367283606,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.6,
             "unit": "x"
           }
         ]
