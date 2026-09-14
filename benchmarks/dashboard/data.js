@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789400266285,
+  "lastUpdate": 1789405307876,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -492,6 +492,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.64,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7352d90af9df02e699ac13861b373d9740d66b45",
+          "message": "Merge pull request #14 from nix-dyn-drv/trynix-openssl\n\nPoint trynix boot link at .#openssl instead of .#dyndrv-giflib",
+          "timestamp": "2026-09-14T12:43:08-04:00",
+          "tree_id": "f85a4ee667cc5f1e5668d34ce8f3a1b6120c3e08",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/7352d90af9df02e699ac13861b373d9740d66b45"
+        },
+        "date": 1789405306861,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.62,
             "unit": "x"
           }
         ]
