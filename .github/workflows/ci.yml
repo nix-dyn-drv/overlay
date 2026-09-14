@@ -211,5 +211,5 @@ jobs:
         with:
           cache: https://dynamicderivations.cachix.org
           publicKey: dynamicderivations.cachix.org-1:AmDuQASmWJsVYB/r0TGTZnQSnoxPzKP8ijfGw/6aT3k=
-          attrs: .#dyndrv-giflib
+          attrs: .#openssl
           githubToken: ${{ secrets.GITHUB_TOKEN }}

@@ -165,6 +165,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-openjpeg = import ./nix/packages/openjpeg.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-capnproto = import ./nix/packages/capnproto.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
