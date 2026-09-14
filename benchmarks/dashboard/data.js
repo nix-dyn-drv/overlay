@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789405360480,
+  "lastUpdate": 1789412003452,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -550,6 +550,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6794c900e8915a089a3cf5a5159a5e0ff46e38b4",
+          "message": "Merge pull request #15 from nix-dyn-drv/bump-dyndrv-dc07a0a\n\nBump dyndrv to dc07a0a",
+          "timestamp": "2026-09-14T14:34:53-04:00",
+          "tree_id": "a0eadde805ffa014636c8828fb1d163e4e85d309",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/6794c900e8915a089a3cf5a5159a5e0ff46e38b4"
+        },
+        "date": 1789412002844,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.58,
             "unit": "x"
           }
         ]
