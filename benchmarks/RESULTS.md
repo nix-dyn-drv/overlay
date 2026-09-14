@@ -29,6 +29,7 @@ Two mechanisms compared:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
+| brotli (~38 TUs, cmake, 3-output) | cold build | **BLOCKED** | -- | -- | Every real per-TU compile fails identically: `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`. Same `discoverTree` cmake-source-path bug as xxHash/re2/tinycbor below, now confirmed a fourth time -- and against the plainest possible cmake layout (in-tree cmake project, cmake+make generator, no out-of-tree `cmakeDir`, no custom target), ruling out several previously-suspected contributing factors. Confirmed directly via `nix derivation show`/`nix store ls -R` on the staged per-TU sandbox tree: it contains only an empty `./-I/build/source/c` directory (from the `-I` compiler flag being mis-staged as a path) and `CMakeFiles/...` bookkeeping -- the real `.c` sources were never staged. Details in `nix/packages/brotli.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -69,7 +70,7 @@ Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
 implies.
 
-## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor)
+## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, brotli)
 
 A follow-up sweep against more nixpkgs packages, beyond the ones wired
 into this flake's outputs, turned up three more distinct failure modes
@@ -85,6 +86,13 @@ package-fixable at this layer):
   nixpkgs pin.** Wired into this flake as `dyndrv-tinycbor` (see table
   above) -- BLOCKED, not a pass, once checked against the pinned
   nixpkgs's real (cmake-based, v7.0) recipe.
+- **brotli: same cmake-source-path bug, fourth confirmed instance.**
+  Wired into this flake as `dyndrv-brotli` (see table above) -- BLOCKED.
+  Unlike xxHash (out-of-tree `build/cmake`) and re2 (cmake+ninja),
+  brotli's cmake project is in-tree and uses the plain cmake+make
+  generator, so this rules out "out-of-tree cmakeDir" and "ninja
+  generator" as necessary conditions -- any cmake-generated absolute
+  `/build/source/...` compile path seems to trip discoverTree's staging.
 - **re2: FAIL, new bug.** 20 of ~51 compile-unit derivations fail with
   `cc1plus: fatal error: <src>.cc: No such file or directory` -- at the
   *compile* step, not link, and for real primary source files, not
