@@ -54,7 +54,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 | Package | Scenario | Notes |
 |---|---|---|
-| argp-standalone (meson, 7 C files) | cold build | `nixninja-argp` builds real `libargp.a`, verified via `ar t` listing all 7 real `.o` translation units. No configure script, no cmake -- meson+ninja only, closest analog to giflib/tree/figlet's "plain build system" simplicity. |
+| argp-standalone (meson, 7 C files) | cold build | `nixninja-argp` builds real `libargp.a` when it succeeds (verified via `ar t` listing all 7 real `.o` translation units), but fails intermittently against the real `/nix/store` in CI (not reproduced locally against the redirected alt-store): `PermissionError: [Errno 13] Permission denied: '/nonexistent'` -- looks like ninja's own generated "install" rule running and writing to `mkMesonPackage`'s literal placeholder path, not yet root-caused. Marked informational/non-blocking in `ci.yml` until understood. |
 
 ## drowse mechanism (`callPackage`)
 
