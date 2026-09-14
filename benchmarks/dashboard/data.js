@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789376600280,
+  "lastUpdate": 1789395490383,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -405,6 +405,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.59,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "bf73bd8050fc7d246f1e19fa750bdf37a6347cb4",
+          "message": "Bump dyndrv to 0d233d3: fixes phases.split cmake+make out-of-tree install\n\nFixes the install-time \"CMake Error: source directory /build/source\ndoes not exist\" bug that blocked brotli/leveldb/capnproto's cmake+make\nbuilds (phases.split's phase 2 forced sourceRoot=\".\" and never\nrecreated the /build/source path cmake's own cached\nCMAKE_HOME_DIRECTORY still pointed at; the existing dyndrvCdToBuildDir\nreconstruction only triggered for meson's build.ninja marker before\nthis fix generalized it to cmake+make too).\n\nConfirmed via an ultracode retest sweep across all 10 open per-package\nPRs: capnproto now passes cleanly (pushed to PR #7); brotli/leveldb\nprogressed past this bug into two more real, distinct dyn-drvs bugs\n(brotli: multi-output dev/lib split not populated before fixupPhase;\nleveldb: the already-documented split-postinstall-before-restore-bug,\nconfirmed a second time via substituteInPlace instead of wrapProgram).",
+          "timestamp": "2026-09-14T10:01:56-04:00",
+          "tree_id": "19accee0fa5166b5bf93c7226b770b41ef905b17",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/bf73bd8050fc7d246f1e19fa750bdf37a6347cb4"
+        },
+        "date": 1789395489594,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.67,
             "unit": "x"
           }
         ]
