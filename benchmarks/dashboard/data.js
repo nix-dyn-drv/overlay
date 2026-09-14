@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789367284603,
+  "lastUpdate": 1789371645639,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -347,6 +347,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "2ae2eb6f93be885cfc6a7770297a042248ab4825",
+          "message": "Add fzakaria/trynix: PR comment with a boot-in-browser link\n\ntrynix.dev boots a nixpkgs build in an in-browser QEMU/WASM VM; the\nGitHub Action posts a PR comment linking to it for packages already\nbuilt and pushed to a cache -- pure reviewer UX, unrelated to the\ndynamic-derivations mechanism itself.\n\nWired to .#dyndrv-giflib (a proven, hard-gated, already-Cachix-pushed\npackage). Needed two real fixes to work at all:\n\n- pull-requests: write permission (for posting the comment).\n- extra-conf on the nix-installer-action step: trynix shells out to a\n  plain, daemon-mediated `nix eval $attr.outPath`, which fails with\n  \"experimental Nix feature 'dynamic-derivations' is disabled\" against\n  the ambient daemon's default config -- confirmed directly (a\n  per-invocation --extra-experimental-features flag can't retroactively\n  grant this to an already-running daemon; only nix.conf at install\n  time can, same fix dyn-drvs' own CI needed). This only grants\n  ca-derivations/dynamic-derivations for evaluating an already-built,\n  already-cached output -- NOT builder-rpc-v0, which still requires the\n  patched-Nix path the rest of this workflow uses to actually build one.\n\nGated on same-repo PR contexts only, matching the Cachix push step it\ndepends on -- a fork PR never pushed anything for trynix to link to.",
+          "timestamp": "2026-09-14T03:22:40-04:00",
+          "tree_id": "11e6fae7b71703abef36e1bfac89a80ae09007be",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/2ae2eb6f93be885cfc6a7770297a042248ab4825"
+        },
+        "date": 1789371644731,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.61,
             "unit": "x"
           }
         ]
