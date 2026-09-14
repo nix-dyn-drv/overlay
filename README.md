@@ -49,7 +49,13 @@ package that failed used either cmake's generated build system or
 autotools' automake dependency-file idiom; every package that passed
 cleanly used a plain, hand-written Makefile.** That's a real, current
 limit on viability, not a fluke of any one package — see
-`benchmarks/RESULTS.md` for the full list.
+`benchmarks/RESULTS.md` for the full list. protobuf (cmake, ~221 TUs,
+real gtest/abseil-cpp deps) confirms one of those bugs — a
+freshly-linked executable losing its execute bit — at much higher
+stakes than its original small-Makefile discovery (libb64): protobuf's
+own build re-executes its just-linked `protoc` as a code generator, so
+the missing exec bit takes down the whole build, not just an optional
+self-test.
 
 **Two more independent mechanisms confirm the underlying feature is
 sound**, even where one library's implementation has gaps. nix-ninja (a

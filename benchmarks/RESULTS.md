@@ -45,6 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
+| protobuf | cold build | **BLOCKED** | -- | -- | cmake, ~221 TUs, real cross-package deps (gtest/zlib/abseil-cpp). protobuf's own build re-executes its freshly-linked `protoc` binary directly (`./protoc`) as a code generator for every `.proto` file in the tree; every invocation fails with `bash: ./protoc: Permission denied` / `Error 126`, cascading into a full `make` failure. Same root cause as the already-documented discoverTree exec-bit bug (libb64, `~/dyn-drvs/docs/discovertree-exec-bit-bug.md`), but here it takes down the whole build (protoc-generated headers are required to compile, not just an optional self-test) -- confirms the bug generalizes well beyond libb64's small Makefile case to a large, unrelated cmake codebase, and still reproduces against the latest pushed dyn-drvs commit (1e9610f, post-giflib-regression-fix) as of 2026-09-14. Details in `nix/packages/protobuf.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -92,6 +93,16 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **A freshly-linked executable loses its execute bit under
+   `discoverTree`** (protobuf) -- first found on libb64's small
+   Makefile self-test (wider survey below), now confirmed on a wired-in
+   flake output at real scale: protobuf's own build re-executes its
+   just-linked `protoc` binary as a code generator for every `.proto`
+   file in the tree, and every invocation fails with `Permission
+   denied`/`Error 126`, taking down the whole build (not just an
+   optional check step, since protoc's generated headers are required
+   to compile). Confirms this bug generalizes across build systems
+   (Makefile and cmake) and isn't specific to libb64's small case.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
