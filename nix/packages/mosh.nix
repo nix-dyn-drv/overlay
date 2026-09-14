@@ -3,22 +3,23 @@
 # (openssl/ncurses/zlib/protobuf). It's currently BLOCKED, not measured,
 # in benchmarks/RESULTS.md.
 #
-# autoreconfHook's setup-hook appends autoreconfPhase to preConfigurePhases;
-# genericBuild computes the actual `phases` list dynamically at build time
-# from unpackPhase/patchPhase/${preConfigurePhases[*]}/configurePhase/...
-# (stdenv-linux/setup). dyndrv.phases.split, which mkAcceleratedStdenv is
-# built on, instead sets phase 1's `phases` to a STATIC sandboxedPhases
-# default (unpackPhase patchPhase configurePhase buildPhase, see
-# nix/lib/phases/split.nix), overriding that dynamic computation, so
-# autoreconfPhase never runs: configurePhase logs "no configure script,
-# doing nothing", buildPhase logs "no Makefile ... doing nothing", and
-# installPhase fails trying to wrap a binary that was never built.
+# The original autoreconfHook phase-dropping bug (phases.split's static
+# sandboxedPhases list overriding genericBuild's dynamic $phases
+# computation) is FIXED as of dyn-drvs 8aa6b86 -- configurePhase/
+# buildPhase both run for real now, and mosh-client/mosh-server link and
+# install correctly.
 #
-# mkAcceleratedStdenv.nix calls self.phases.split without forwarding a
-# sandboxedPhases/replayPhases argument, so there's no parameter here to
-# work around it. Real fix is in dyn-drvs: read the package's own dynamic
-# $phases instead of the static default, or plumb sandboxedPhases/
-# replayPhases through mkAcceleratedStdenv's params.
+# OPEN, ROOT-CAUSED (different bug, found once the build got this far):
+# mosh's own postInstall (`wrapProgram $out/bin/mosh ...`) runs as part
+# of nixpkgs' installPhase itself (postInstall is a hook, not a separate
+# phase), but phases.split's synthesized dyndrvRestoreOutput phase --
+# which copies phase 1's placeholder-rooted tree into the real $out --
+# is inserted as a SEPARATE phase AFTER installPhase. So postInstall's
+# `wrapProgram $out/bin/mosh` looks for $out/bin/mosh before the restore
+# copy ever runs, even though bin/mosh really was installed (just still
+# under the placeholder root). Fails with "Cannot wrap ... because it
+# does not exist". See
+# ~/dyn-drvs/docs/split-postinstall-before-restore-bug.md.
 
 {
   pkgs,
