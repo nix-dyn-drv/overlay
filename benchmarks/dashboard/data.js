@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789371645639,
+  "lastUpdate": 1789376600280,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -376,6 +376,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.61,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "0e0e5a46db739be13948a6f58493f7b649be0580",
+          "message": "Bump dyndrv to 227b1a6: fixes cmake -MT/-MF source misdetection, ar/ranlib probe crashes\n\nTwo more real fixes landed upstream:\n- 97a987d: discoverTree's firstSourceIdx misidentified -MT/-MF's own\n  values as the source file for cmake-generated compile lines (the\n  actual root cause of what was documented as \"discovertree-cmake-\n  source-path-bug.md\" -- that doc's original diagnosis was wrong,\n  now corrected upstream).\n- 227b1a6: ar/ranlib shims crashing/misclassifying on version-probe\n  invocations.\n\nThis likely resolves several of the open per-package PRs' documented\n\"cmake-source-path bug\" blockers (brotli, leveldb, libwebp, libssh,\nopenjpeg, x265) -- re-testing each against this rev next.",
+          "timestamp": "2026-09-14T04:44:14-04:00",
+          "tree_id": "9308285ef90778e52475a6069a642e9964790793",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/0e0e5a46db739be13948a6f58493f7b649be0580"
+        },
+        "date": 1789376599168,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.59,
             "unit": "x"
           }
         ]
