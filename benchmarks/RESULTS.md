@@ -46,6 +46,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
 | brotli (~38 TUs, cmake, 3-output) | cold build | **BLOCKED** | -- | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`) is fixed upstream (dyn-drvs 97a987d) -- confirmed all three per-TU shared-lib derivations (libbrotlicommon/libbrotlienc/libbrotlidec) now build and link cleanly. Now blocked by a different, new bug further into the build: `installPhase`'s `make install` succeeds (dyn-drvs 0d233d3 fixed the cmake+make `cmake_check_build_system`/`/build/source` install-time error too), but `fixupPhase` then fails with `find: '/nix/store/...-brotli-1.2.0-dev': No such file or directory` -- the generalized cmake+make out-of-tree restore path in `dyndrvRestoreOutput` copies content into `$out` only, never invoking `_multioutDevs`/`_multioutDocs` the way the placeholder-restore branch does, so this 3-output (`out`/`dev`/`lib`) package's `$dev`/`$lib` never get populated before fixup runs. Details in `nix/packages/brotli.nix`. |
+| capnproto (~187 .c++ TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 0d233d3) | -- | Retested against dyn-drvs 0d233d3 ("Fix phases.split cmake+make out-of-tree install failure (task #138)"): `dyndrv-capnproto` now builds clean end to end -- real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`libkj-async.so`/etc and `bin/capnp`/`bin/capnpc-c++`/`bin/capnpc-capnp` all present, `capnp --version` prints `Cap'n Proto version 1.4.0`. Previously (as last tested against dyn-drvs 227b1a6) every real per-TU compile AND link succeeded (`buildPhase completed in 39 seconds`) but `installPhase` failed: `CMake Error: The source directory "/build/source" does not exist` / `make: *** [Makefile:383: cmake_check_build_system] Error 1` -- distinct from the compile-time discoverTree cmake-source-path bug (tinycbor/xxHash/re2): `phases.split`'s phase 2 forced `sourceRoot = "."`, so its `unpackPhase` never recreated the `/build/source` subdirectory cmake's own cached `CMAKE_HOME_DIRECTORY` (baked into `CMakeCache.txt` at phase 1 configure time) still pointed at -- the existing `dyndrvCdToBuildDir` reconstruction logic previously only triggered for meson's `build.ninja` marker, never for cmake+make; 0d233d3 generalizes it to cmake+make too. (Package itself still required a package-level workaround just to eval: nixpkgs' by-name `capnproto` takes a `clangStdenv` argument, not `stdenv`, since GCC ICEs on its C++20 coroutines -- worked around here by accelerating `clangStdenv` directly.) Details in `nix/packages/capnproto.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -65,7 +66,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Four bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Five bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -93,6 +94,20 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
+   absolute source directory** (capnproto) -- every real per-TU compile
+   and link succeeded, but `installPhase` then failed outright
+   (`CMake Error: The source directory "/build/source" does not exist`)
+   because phase 2 forced `sourceRoot = "."`, and the existing
+   "reconstruct phase 1's absolute build-dir position" logic
+   (`dyndrvCdToBuildDir`) only fired when it found meson's own
+   `build.ninja` marker, never for a cmake-generated `Makefile`'s cached
+   `CMAKE_HOME_DIRECTORY`. Distinct from the compile-time discoverTree
+   cmake-source-path bug below (tinycbor/xxHash/re2) -- this one was an
+   install-time failure that happened even after every compile/link
+   already succeeded for real. **FIXED in dyn-drvs 0d233d3** ("Fix
+   phases.split cmake+make out-of-tree install failure (task #138)");
+   capnproto now builds clean end to end.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
