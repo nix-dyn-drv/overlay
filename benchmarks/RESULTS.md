@@ -69,12 +69,12 @@ Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
 implies.
 
-## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor)
+## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, libpng, libtasn1, gperf)
 
 A follow-up sweep against more nixpkgs packages, beyond the ones wired
-into this flake's outputs, turned up three more distinct failure modes
-not seen before (findings not wired into flake outputs; not
-package-fixable at this layer):
+into this flake's outputs, turned up five distinct new failure modes
+plus a repeat confirmation of a known one (findings not wired into
+flake outputs; not package-fixable at this layer):
 
 - **xxHash: FAIL, new bug.** Every real TU compile fails identically:
   `cc1: fatal error: /build/source/xxhash.c: No such file or directory`.
@@ -100,6 +100,25 @@ package-fixable at this layer):
   handling.
 - **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
   `libmpfr.so` link step, identical shape to pcre2).
+- **libpng, libtasn1: FAIL, same new bug on both.** Fails immediately at
+  phase 1 setup, before any compile runs: `error: _assignFirst: could
+  not find a non-empty variable whose name to assign to outputMan. The
+  following variables were all unset or empty: man dev`. Both packages'
+  real nixpkgs recipes set `outputBin = "dev";` explicitly;
+  `phases.split` forces phase 1 to single-output but doesn't clear that
+  inherited literal override, so nixpkgs' own multi-output bookkeeping
+  looks for a `$dev`/`$man` that was never exported. Independently
+  reproduced. Likely affects any package that sets `outputBin`/
+  `outputMan`/`outputDev` explicitly -- a common pattern for small
+  libraries whose only binary is a dev-only helper.
+- **gperf: FAIL, new bug.** Gets much further than libpng/libtasn1: real
+  per-TU compiles succeed, then every single one fails at the very next
+  Makefile line: `mv: cannot stat '.deps/hash.Tpo': No such file or
+  directory`. Automake's classic depcomp idiom (`-MD -MP -MF
+  .deps/$*.Tpo` alongside `-c -o $@`) writes a SECOND file per compile
+  invocation that dyn-drvs doesn't track or stage back -- only the
+  primary `-o` output round-trips out of the per-TU sandbox. Independently
+  reproduced. Extremely common pattern across autotools C/C++ projects.
 
 ## The break-even lesson
 
