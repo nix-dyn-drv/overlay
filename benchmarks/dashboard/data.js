@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789423306031,
+  "lastUpdate": 1789424644463,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -637,6 +637,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9d048240e8344979b37b64b1cc70dc5c098cbb50",
+          "message": "Merge pull request #8 from nix-dyn-drv/x264-package\n\nAdd x264 (autotools configure, not cmake) -- PASS, 2 new dyn-drvs bugs found+worked around (retested, still needed)",
+          "timestamp": "2026-09-14T18:06:12-04:00",
+          "tree_id": "7aa12a74d882a8fb1189cce674f146f3c3dc409d",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/9d048240e8344979b37b64b1cc70dc5c098cbb50"
+        },
+        "date": 1789424643846,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.58,
             "unit": "x"
           }
         ]
