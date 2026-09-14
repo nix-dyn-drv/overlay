@@ -30,8 +30,10 @@ acceleration only pays off when each unit costs more to compile than the
 nixpkgs packages found five more distinct dyn-drvs bugs beyond the four
 already documented — every failure traced back to either autotools'
 dependency-tracking idiom or cmake's generated build systems, while
-every clean pass used a plain, hand-written Makefile. Two more
-independent libraries, nix-ninja and drowse, each demonstrate a
+every clean pass used a plain, hand-written Makefile. libwebp (~171 TUs,
+single-output — picked to dodge multi-output gaps entirely) hits the
+same cmake-source-path bug regardless, a fourth confirmed instance. Two
+more independent libraries, nix-ninja and drowse, each demonstrate a
 genuinely different angle on the same underlying feature: nix-ninja
 turns a meson-generated `build.ninja`'s real build graph into per-TU
 derivations (`nixninja-argp`, real `libargp.a` verified); drowse defers
