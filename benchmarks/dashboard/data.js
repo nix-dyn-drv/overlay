@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789351112327,
+  "lastUpdate": 1789353902499,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -226,6 +226,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/nix-dyn-drv/overlay/commit/b3ed508980f68f76609b3fda7588f289f5b1ba18"
         },
         "date": 1789351111271,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 1,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "fa843246d9a90de4e77eae05372574fb0ac6f90a",
+          "message": "Bump dyndrv input to latest pushed commit (2024a41)\n\nPicks up dyn-drvs' recent doc consolidation and flake-purity work (Rpc\nwrapper flake output, --impure removal). Verified: flake evaluates\nclean, and all five proven packages (freetype, giflib, tree, figlet,\nnnn) still build clean; zstd still blocked as documented (its link-step\nfix is still local/uncommitted upstream, not in this pushed rev yet).",
+          "timestamp": "2026-09-13T22:32:13-04:00",
+          "tree_id": "ae663303f3f2c87a1f602b6ff1c489399a64af23",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/fa843246d9a90de4e77eae05372574fb0ac6f90a"
+        },
+        "date": 1789353901891,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
