@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789348657843,
+  "lastUpdate": 1789348872786,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -144,6 +144,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 1.08,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "adce1fe854bac3ed263868a4ab3fa49dc22656b3",
+          "message": "Fix nixpkgs-update.yml: query root's nixpkgs node, not dyndrv's internal one\n\n.locks.nodes.nixpkgs is a real node in this flake's lock file, but it's\ndyn-drvs' own internal nixpkgs input (a separate nixos-26.05 pin, deduped\nunder that name since flake.lock names nodes by first occurrence), not\nroot's nixpkgs-unstable input. The before/after rev comparison silently\ncompared the wrong node and always read as \"unchanged\" even after a real\nbump (confirmed: manual dispatch run 34794805145 skipped in 32s despite\nnixpkgs-unstable having moved from 2026-08-29 to 2026-09-13 locally).\nFixed to resolve via .locks.nodes.root.inputs.nixpkgs first.",
+          "timestamp": "2026-09-13T21:09:18-04:00",
+          "tree_id": "7a35d923db2d9c02585f91e26f48aba65ff621cb",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/adce1fe854bac3ed263868a4ab3fa49dc22656b3"
+        },
+        "date": 1789348872199,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 1.01,
             "unit": "x"
           }
         ]
