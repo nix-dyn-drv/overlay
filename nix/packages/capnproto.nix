@@ -1,14 +1,28 @@
 # capnproto (cmake+make, ~187 .c++ TUs across kj/capnp, template-heavy
-# C++20 coroutine code). BLOCKED: every real per-TU compile AND every
-# real link succeeds (confirmed: `buildPhase completed in 39 seconds`,
-# every one of `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`capnp`/etc
-# actually built, via real dynamic derivations), but the accelerated
-# build fails in `installPhase`, in phase 2 (`dyndrv.phases.split`'s
-# ordinary-derivation replay stage) -- a NEW dyn-drvs bug, distinct from
-# the already-documented `discovertree-cmake-source-path-bug.md`
-# (that one is a COMPILE-time failure on out-of-tree cmake layouts
-# xxHash/re2/tinycbor hit; this one is an INSTALL-time failure that
-# happens even though every compile/link already succeeded).
+# C++20 coroutine code). FIXED as of dyn-drvs commit 0d233d3 ("Fix
+# phases.split cmake+make out-of-tree install failure (task #138)"),
+# now on origin/master: `dyndrv-capnproto` builds clean end to end
+# (real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`libkj-async.so`/etc
+# and `bin/capnp`/`bin/capnpc-c++`/`bin/capnpc-capnp` all present and
+# runnable -- `capnp --version` prints `Cap'n Proto version 1.4.0`).
+# This is exactly the bug root-caused below in point 2: 0d233d3 teaches
+# `phases.split`'s phase 2 to also reconstruct the absolute source
+# directory for a cmake+make build (previously only meson's
+# `build.ninja` marker triggered that reconstruction), so `installPhase`
+# no longer fails with `CMake Error: The source directory "/build/
+# source" does not exist`.
+#
+# Prior history (BLOCKED, as last retested against dyn-drvs 227b1a6):
+# every real per-TU compile AND every real link succeeded (confirmed:
+# `buildPhase completed in 39 seconds`, every one of `libkj.so`/
+# `libcapnp.so`/`libcapnp-rpc.so`/`capnp`/etc actually built, via real
+# dynamic derivations), but the accelerated build failed in
+# `installPhase`, in phase 2 (`dyndrv.phases.split`'s ordinary-derivation
+# replay stage) -- a bug distinct from the already-documented
+# `discovertree-cmake-source-path-bug.md` (that one is a COMPILE-time
+# failure on out-of-tree cmake layouts xxHash/re2/tinycbor hit; this one
+# was an INSTALL-time failure that happened even though every
+# compile/link already succeeded). Root cause and history below.
 #
 # 1. Not a plain `.override { stdenv = ... }` package: nixpkgs' by-name
 #    `capnproto` recipe (`pkgs/by-name/ca/capnproto/package.nix`) is
@@ -28,7 +42,8 @@
 #    and overrides the `clangStdenv` argument name capnproto's recipe
 #    actually reads, instead of `stdenv`.
 #
-# 2. BLOCKED, root-caused, NOT package-fixable: `installPhase` fails with
+# 2. FIXED in dyn-drvs 0d233d3 (was BLOCKED, root-caused, NOT
+#    package-fixable): `installPhase` used to fail with
 #      CMake Error: The source directory "/build/source" does not exist.
 #      make: *** [Makefile:383: cmake_check_build_system] Error 1
 #    Root cause: cmake's own generated `Makefile`'s `cmake_check_build_
@@ -56,14 +71,14 @@
 #    BuildDir` knob avoids this -- the missing absolute directory is
 #    `CMAKE_HOME_DIRECTORY` (the ORIGINAL, non-relocatable source root
 #    cmake bootstraps from), not the separate build subdirectory
-#    `cmakeBuildDir`/`dontUseCmakeBuildDir` control. Real fix belongs in
-#    `phases/split.nix`'s `dyndrvCdToBuildDir`: generalize the existing
-#    meson-only "reconstruct phase 1's absolute build-dir position"
-#    logic to also trigger for a cmake+make build (e.g. detect
-#    `CMakeCache.txt`/`Makefile.cmake` the same way `.dyndrv-build-
-#    relpath` detects `build.ninja`, and recreate the `source/` (or
-#    whatever `sourceRoot` phase 1 actually used) parent directory phase
-#    1's own `CMAKE_HOME_DIRECTORY` still points at).
+#    `cmakeBuildDir`/`dontUseCmakeBuildDir` control. Fix landed in
+#    dyn-drvs 0d233d3, in `phases/split.nix`'s `dyndrvCdToBuildDir`:
+#    generalized the existing meson-only "reconstruct phase 1's absolute
+#    build-dir position" logic to also trigger for a cmake+make build
+#    (detecting `CMakeCache.txt`/cmake's generated `Makefile` the same
+#    way `.dyndrv-build-relpath` detects `build.ninja`, recreating the
+#    `source/` (or whatever `sourceRoot` phase 1 actually used) parent
+#    directory phase 1's own `CMAKE_HOME_DIRECTORY` still points at).
 #
 # nixpkgs' capnproto is single-output (`outputs = [ "out" "debug" ]`;
 # `separateDebugInfo` is on, no separate `bin`/`lib`/`dev` split the way
