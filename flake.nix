@@ -1,5 +1,5 @@
 {
-  description = "Showcasing Nix dynamic derivations at nixpkgs scale, two mechanisms side by side";
+  description = "Showcasing Nix dynamic derivations at nixpkgs scale, four mechanisms side by side";
 
   nixConfig = {
     extra-experimental-features = [
@@ -24,6 +24,8 @@
       url = "github:tomberek/dyn-drvs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixNinja.url = "github:pdtpartners/nix-ninja";
+    drowse.url = "github:figsoda/drowse";
   };
 
   outputs =
@@ -97,9 +99,14 @@
             };
 
           # dyndrv mechanism (accelerate.mkAcceleratedStdenv / phases.split).
-          # freetype is dyn-drvs' own example; giflib is new and clean.
-          # zstd/mosh/openssl/tinycbor are new and each hit a distinct
-          # open dyn-drvs bug, see nix/packages/*.nix.
+          # freetype is dyn-drvs' own example; giflib/tree/figlet/nnn are
+          # new and clean. zstd/mosh/openssl/tinycbor are new and each
+          # hit a distinct open dyn-drvs bug, see nix/packages/*.nix.
+          # dyndrv-freetype-baseline: plain, unaccelerated freetype --
+          # the real comparison point for benchmarks/patch-rebuild.sh
+          # (dyndrv-freetype alone isn't a valid plain/accelerated pair).
+          dyndrv-freetype-baseline = pkgs.freetype;
+
           dyndrv-freetype =
             (import (inputs.dyndrv.outPath + "/try-it-out/examples/07-accelerate-real-package.nix") {
               inherit pkgs;
@@ -109,6 +116,24 @@
             }).accelerated;
 
           dyndrv-giflib = import ./nix/packages/giflib.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-tree = import ./nix/packages/tree.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-figlet = import ./nix/packages/figlet.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-nnn = import ./nix/packages/nnn.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
             nixPackage = dyndrvPatchedNix;
@@ -136,6 +161,24 @@
             inherit pkgs;
             dyndrv = dyndrvLib;
             nixPackage = dyndrvPatchedNix;
+          };
+
+          # nix-ninja mechanism: a drop-in `ninja` replacement translating a
+          # meson-generated build.ninja's real build graph into dynamic
+          # derivations. Third, independent implementation of the same
+          # builtins.outputOf/builder-rpc-v0 primitive nixgg/dyndrv use.
+          nixninja-argp = import ./nix/packages/nixninja-argp.nix {
+            inherit pkgs;
+            nixNinjaFlake = inputs.nixNinja;
+          };
+
+          # drowse mechanism: defers a whole package's EVALUATION into a
+          # nested nix-instantiate (recursive-nix), not a per-TU build
+          # split -- the "avoid IFD" half of dynamic derivations, distinct
+          # from nixgg/dyndrv/nix-ninja's per-TU/per-checkpoint splitting.
+          drowse-hello = import ./nix/packages/drowse-hello.nix {
+            inherit pkgs;
+            drowse = inputs.drowse.lib.${system};
           };
 
           # Split into three attrs since a flake package must be a

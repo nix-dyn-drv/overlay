@@ -3,13 +3,26 @@
 Numbers this repo's README cites. All measured on a specific machine;
 losses are reported alongside wins.
 
-Two mechanisms compared:
+Four mechanisms compared, all implementing the same underlying Nix
+feature (`builtins.outputOf`, dynamic derivations) independently:
 
 - **nixgg's `splitStdenv`/`dynDrvStdenv`** -- Go-based shim, already proven
   at nixpkgs scale (`openssl`/`openssl-3_5`/`hello`/`mosh`/`zstd` outputs).
 - **dyn-drvs' `accelerate.mkAcceleratedStdenv`** -- Nix-language library
   (`dyndrv-*` outputs). See `nix/packages/*.nix` headers for per-package
   status.
+- **nix-ninja's `mkMesonPackage`** -- a drop-in `ninja` replacement
+  (`$NINJA=nix-ninja`) that turns a meson-generated `build.ninja`'s real
+  build graph into dynamic derivations (`nixninja-argp` output). Doesn't
+  override an existing package's stdenv like the other three -- it
+  reconstructs the meson invocation directly from `src`/
+  `nativeBuildInputs`/a ninja target name, since `mkMesonPackage` isn't
+  exported as a `lib` output.
+- **drowse's `callPackage`** -- defers a whole package's *evaluation*
+  into a nested `nix-instantiate` (via `recursive-nix`), not a per-TU
+  *build* split like the other three (`drowse-hello` output). The "avoid
+  IFD" half of the dynamic-derivations story, distinct from fine-grained
+  build splitting.
 
 ## nixgg mechanism (`splitStdenv`)
 
@@ -23,17 +36,32 @@ Two mechanisms compared:
 
 | Package | Scenario | TUs rebuilt | Wall-clock (plain vs accelerated) | Speedup | Notes |
 |---|---|---|---|---|---|
-| freetype (~45 TUs) | one-file patch | 2/45 | 4.43s vs 78.86s | **0.06x (17x slower)** | `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (known loss, dyn-drvs BASELINE.md). |
+| freetype (~45 TUs) | cold build | 93 registered | 11.8-11.9s vs 77-81s | **0.15x (~6.7x slower)** | Re-measured directly in this repo (`benchmarks/patch-rebuild.sh dyndrv-freetype-baseline dyndrv-freetype`, two runs, both ~0.15x). `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (same conclusion as dyn-drvs' own BASELINE.md, but that repo's 17x/0.06x figure is a DIFFERENT scenario -- a one-file patch rebuild, not a cold build -- and was never itself re-verified here; the CI benchmark step that was supposed to produce this repo's own patch-rebuild number had a bug comparing `dyndrv-freetype` against itself, fixed alongside this remeasurement). |
 | freetype | version bump (3 files) | 6/45 | 18.24s vs 52.01s | **0.35x** | Same cause, smaller magnitude (dyn-drvs number, not re-measured here). |
 | giflib | cold build | -- | pass | -- | `dyndrv-giflib` builds clean end to end. Plain Makefile, `ar`-based static lib -- no `cc`-driven link step, so it doesn't exercise the discoverTree link-step bug. |
+| tree | cold build | -- | pass | -- | `dyndrv-tree` builds clean end to end. Plain hand-written Makefile, no configure/cmake, real `bin/tree` verified runnable. |
+| figlet | cold build | -- | pass | -- | `dyndrv-figlet` builds clean end to end. Plain hand-written Makefile, no configure/cmake, real `bin/figlet` verified runnable. |
+| nnn | cold build | -- | pass | -- | `dyndrv-nnn` builds clean end to end, including nixpkgs' `makeWrapper`-generated shell shim. Plain hand-written Makefile, no configure/cmake. |
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
-| zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
-| mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
-| brotli (~38 TUs, cmake, 3-output) | cold build | **BLOCKED** | -- | -- | Every real per-TU compile fails identically: `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`. Same `discoverTree` cmake-source-path bug as xxHash/re2/tinycbor below, now confirmed a fourth time -- and against the plainest possible cmake layout (in-tree cmake project, cmake+make generator, no out-of-tree `cmakeDir`, no custom target), ruling out several previously-suspected contributing factors. Confirmed directly via `nix derivation show`/`nix store ls -R` on the staged per-TU sandbox tree: it contains only an empty `./-I/build/source/c` directory (from the `-I` compiler flag being mis-staged as a path) and `CMakeFiles/...` bookkeeping -- the real `.c` sources were never staged. Details in `nix/packages/brotli.nix`. |
+| zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
+| mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
+| brotli (~38 TUs, cmake, 3-output) | cold build | **BLOCKED** | -- | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`) is fixed upstream (dyn-drvs 97a987d) -- confirmed all three per-TU shared-lib derivations (libbrotlicommon/libbrotlienc/libbrotlidec) now build and link cleanly. Now blocked by a different, new bug further into the build: `installPhase`'s `make install` succeeds (dyn-drvs 0d233d3 fixed the cmake+make `cmake_check_build_system`/`/build/source` install-time error too), but `fixupPhase` then fails with `find: '/nix/store/...-brotli-1.2.0-dev': No such file or directory` -- the generalized cmake+make out-of-tree restore path in `dyndrvRestoreOutput` copies content into `$out` only, never invoking `_multioutDevs`/`_multioutDocs` the way the placeholder-restore branch does, so this 3-output (`out`/`dev`/`lib`) package's `$dev`/`$lib` never get populated before fixup runs. Details in `nix/packages/brotli.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
 | openssl | Checkpoint D (patch rebuild count) | -- | NOT REACHED | -- | Gated on C. |
+
+## nix-ninja mechanism (`mkMesonPackage`)
+
+| Package | Scenario | Notes |
+|---|---|---|
+| argp-standalone (meson, 7 C files) | cold build | `nixninja-argp` builds real `libargp.a` when it succeeds (verified via `ar t` listing all 7 real `.o` translation units), but fails intermittently against the real `/nix/store` in CI (not reproduced locally against the redirected alt-store): `PermissionError: [Errno 13] Permission denied: '/nonexistent'` -- looks like ninja's own generated "install" rule running and writing to `mkMesonPackage`'s literal placeholder path, not yet root-caused. Marked informational/non-blocking in `ci.yml` until understood. |
+
+## drowse mechanism (`callPackage`)
+
+| Package | Scenario | Notes |
+|---|---|---|
+| hello | cold build | `drowse-hello` builds a real, runnable `bin/hello` (verified: prints "Hello, world!"). Uses drowse's own tested example (`tests/hello.nix`) verbatim. Distinct mechanism from the other three: defers the whole package's *evaluation* into a nested `nix-instantiate` (recursive-nix), rather than splitting an already-evaluated package's *build* into checkpoints -- demonstrating "avoid IFD" rather than "fine-grained per-TU caching." |
 
 ## Findings fed back to dyn-drvs
 
@@ -70,12 +98,12 @@ Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
 implies.
 
-## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, brotli)
+## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, brotli, libpng, libtasn1, gperf)
 
 A follow-up sweep against more nixpkgs packages, beyond the ones wired
-into this flake's outputs, turned up three more distinct failure modes
-not seen before (findings not wired into flake outputs; not
-package-fixable at this layer):
+into this flake's outputs, turned up five distinct new failure modes
+plus a repeat confirmation of a known one (findings not wired into
+flake outputs; not package-fixable at this layer):
 
 - **xxHash: FAIL, new bug.** Every real TU compile fails identically:
   `cc1: fatal error: /build/source/xxhash.c: No such file or directory`.
@@ -86,13 +114,13 @@ package-fixable at this layer):
   nixpkgs pin.** Wired into this flake as `dyndrv-tinycbor` (see table
   above) -- BLOCKED, not a pass, once checked against the pinned
   nixpkgs's real (cmake-based, v7.0) recipe.
-- **brotli: same cmake-source-path bug, fourth confirmed instance.**
-  Wired into this flake as `dyndrv-brotli` (see table above) -- BLOCKED.
-  Unlike xxHash (out-of-tree `build/cmake`) and re2 (cmake+ninja),
-  brotli's cmake project is in-tree and uses the plain cmake+make
-  generator, so this rules out "out-of-tree cmakeDir" and "ninja
-  generator" as necessary conditions -- any cmake-generated absolute
-  `/build/source/...` compile path seems to trip discoverTree's staging.
+- **brotli: original cmake-source-path bug fixed upstream (dyn-drvs
+  97a987d), now blocked by a different multi-output restore-ordering
+  bug.** See table above -- BLOCKED, real forward progress though: this
+  was initially the fourth confirmed instance of the cmake-source-path
+  bug (in-tree, plain cmake+make generator, ruling out "out-of-tree
+  cmakeDir" and "ninja generator" as necessary conditions), now
+  superseded once retested against the fix.
 - **re2: FAIL, new bug.** 20 of ~51 compile-unit derivations fail with
   `cc1plus: fatal error: <src>.cc: No such file or directory` -- at the
   *compile* step, not link, and for real primary source files, not
@@ -108,6 +136,32 @@ package-fixable at this layer):
   handling.
 - **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
   `libmpfr.so` link step, identical shape to pcre2).
+- **libpng, libtasn1: FAIL, same new bug on both.** Fails immediately at
+  phase 1 setup, before any compile runs: `error: _assignFirst: could
+  not find a non-empty variable whose name to assign to outputMan. The
+  following variables were all unset or empty: man dev`. Both packages'
+  real nixpkgs recipes set `outputBin = "dev";` explicitly;
+  `phases.split` forces phase 1 to single-output but doesn't clear that
+  inherited literal override, so nixpkgs' own multi-output bookkeeping
+  looks for a `$dev`/`$man` that was never exported. Independently
+  reproduced. Likely affects any package that sets `outputBin`/
+  `outputMan`/`outputDev` explicitly -- a common pattern for small
+  libraries whose only binary is a dev-only helper.
+- **gperf: FAIL, new bug.** Gets much further than libpng/libtasn1: real
+  per-TU compiles succeed, then every single one fails at the very next
+  Makefile line: `mv: cannot stat '.deps/hash.Tpo': No such file or
+  directory`. Automake's classic depcomp idiom (`-MD -MP -MF
+  .deps/$*.Tpo` alongside `-c -o $@`) writes a SECOND file per compile
+  invocation that dyn-drvs doesn't track or stage back -- only the
+  primary `-o` output round-trips out of the per-TU sandbox. Independently
+  reproduced. Extremely common pattern across autotools C/C++ projects.
+
+Eight for eight of the packages above hit an autotools- or cmake-shaped
+bug. The common factor in every actual PASS so far (giflib, tree,
+figlet, nnn) is a plain, hand-written Makefile with no `configure`
+script and no cmake -- the autotools depcomp idiom and cmake's
+generated build systems are both, independently, landmines for this
+mechanism as currently implemented.
 
 ## The break-even lesson
 
@@ -116,8 +170,9 @@ enough to amortize the registration tax (~80ms/derivation for
 `nix derivation add`, per dyn-drvs' `registration-overhead.sh`). A 30-file
 synthetic library with real per-file compile weight shows a 2.90x win;
 the same mechanism against freetype's small, fast-compiling TUs shows a
-17x loss. Both TU count and per-unit compile cost matter -- wins and
-losses don't generalize by mechanism alone.
+~6.7x loss (measured directly here, cold build). Both TU count and
+per-unit compile cost matter -- wins and losses don't generalize by
+mechanism alone.
 
 ## How to reproduce
 
