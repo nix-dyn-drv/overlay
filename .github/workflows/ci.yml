@@ -205,6 +205,15 @@ jobs:
       # dynamic-derivations mechanism itself, just a UX add-on over the
       # Cachix push above. Same same-repo gate as the push itself, since
       # a fork PR never pushed anything for trynix to find in the cache.
+      #
+      # build: true -- without it, trynix only evaluates .#openssl and
+      # trusts an EARLIER step to have already built+pushed it; the
+      # "Push to Cachix" step that actually does that runs AFTER this
+      # one in job order, so relying on it was a real ordering race
+      # (intermittently: "asking nix for the path it stands for without
+      # building" / "local builds are disabled (max-jobs = 0)"). Setting
+      # build: true makes this step build .#openssl itself instead of
+      # assuming another step already did.
       - name: Post trynix boot link (PR comments only)
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: fzakaria/trynix@v1
@@ -212,4 +221,5 @@ jobs:
           cache: https://dynamicderivations.cachix.org
           publicKey: dynamicderivations.cachix.org-1:AmDuQASmWJsVYB/r0TGTZnQSnoxPzKP8ijfGw/6aT3k=
           attrs: .#openssl
+          build: true
           githubToken: ${{ secrets.GITHUB_TOKEN }}
