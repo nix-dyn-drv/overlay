@@ -165,6 +165,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-capnproto = import ./nix/packages/capnproto.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           # nix-ninja mechanism: a drop-in `ninja` replacement translating a
           # meson-generated build.ninja's real build graph into dynamic
           # derivations. Third, independent implementation of the same
