@@ -25,6 +25,8 @@ Two mechanisms compared:
 |---|---|---|---|---|---|
 | freetype (~45 TUs) | one-file patch | 2/45 | 4.43s vs 78.86s | **0.06x (17x slower)** | `dyndrv-freetype` builds real `libfreetype.so`, 93 dynamic derivations registered. Per-TU compile cost too small to amortize the ~80ms/derivation registration tax (known loss, dyn-drvs BASELINE.md). |
 | freetype | version bump (3 files) | 6/45 | 18.24s vs 52.01s | **0.35x** | Same cause, smaller magnitude (dyn-drvs number, not re-measured here). |
+| giflib | cold build | -- | pass | -- | `dyndrv-giflib` builds clean end to end. Plain Makefile, `ar`-based static lib -- no `cc`-driven link step, so it doesn't exercise the discoverTree link-step bug. |
+| tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
@@ -51,7 +53,12 @@ patching dyn-drvs' source); documented in the relevant
 3. **`discoverTree`'s `-M -MG` scan can't see link-step inputs** (zstd)
    -- `.o`/`-o <exe>` args make gcc treat the invocation as a no-op link
    with nothing to discover, so a `cc`/`c++`-driven link step's object
-   files are never staged or resolved (empty `inputs.drvs`).
+   files are never staged or resolved (empty `inputs.drvs`). Confirmed a
+   second and third time on pcre2 (libtool) and mpfr (libtool) -- but not
+   universal: an older qmake-based tinycbor 0.6.1 build (from a different
+   nixpkgs channel than this repo's pin) had `cc`/`c++`-driven `.so`/
+   executable links that built fine, so it's specific to some invocation
+   shapes, not "any cc-driven link."
 4. **`finalAttrs.finalPackage` self-reference missing** (openssl) --
    `mkAcceleratedStdenv`'s custom `mkDerivation` supports the
    `finalAttrs: {...}` call convention but doesn't provide the
@@ -61,6 +68,38 @@ patching dyn-drvs' source); documented in the relevant
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
 implies.
+
+## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor)
+
+A follow-up sweep against more nixpkgs packages, beyond the ones wired
+into this flake's outputs, turned up three more distinct failure modes
+not seen before (findings not wired into flake outputs; not
+package-fixable at this layer):
+
+- **xxHash: FAIL, new bug.** Every real TU compile fails identically:
+  `cc1: fatal error: /build/source/xxhash.c: No such file or directory`.
+  nixpkgs builds xxHash via cmake on a `build/cmake` subdirectory one
+  level below the sources; `discoverTree`'s per-TU sandbox doesn't
+  resolve the cmake-relative source path correctly for this layout.
+- **tinycbor: same cmake-source-path bug against this repo's actual
+  nixpkgs pin.** Wired into this flake as `dyndrv-tinycbor` (see table
+  above) -- BLOCKED, not a pass, once checked against the pinned
+  nixpkgs's real (cmake-based, v7.0) recipe.
+- **re2: FAIL, new bug.** 20 of ~51 compile-unit derivations fail with
+  `cc1plus: fatal error: <src>.cc: No such file or directory` -- at the
+  *compile* step, not link, and for real primary source files, not
+  headers. Doesn't match any of the four bugs above; looks like a
+  cmake+ninja-specific variant of source materialization failing for
+  some compile invocations.
+- **libb64: FAIL, new bug.** Compiles and links cleanly (giflib-like `ar`
+  path plus direct `gcc`/`g++` links, neither hits bug #3) but fails at
+  `make[1]: *** [Makefile:36: test-c-example1] Error 126` -- the
+  just-linked example binary lacks its executable bit, and the upstream
+  Makefile's self-test runs it immediately after linking. Looks like a
+  file-mode/permission-bit gap specific to discoverTree's link-output
+  handling.
+- **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
+  `libmpfr.so` link step, identical shape to pcre2).
 
 ## The break-even lesson
 

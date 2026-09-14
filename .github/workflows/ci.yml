@@ -34,12 +34,12 @@ jobs:
       - name: Verify run-nix-ci.sh can fetch+build a working Nix
         run: ./try-it-out/run-nix-ci.sh --version
 
-      # Tier 0 (freetype, giflib) are the only dyn-drvs packages that build
-      # clean end to end (benchmarks/RESULTS.md); hard gate here. zstd/mosh/
-      # openssl each hit a distinct open dyn-drvs bug
-      # (nix/packages/{zstd,mosh,openssl}.nix) and run informationally
-      # below instead, so this job's pass/fail tracks regressions in the
-      # proven path, not upstream bugs it can't fix.
+      # Tier 0 (freetype, giflib) are the dyn-drvs packages that build
+      # clean end to end (benchmarks/RESULTS.md); hard gate here.
+      # zstd/mosh/openssl/tinycbor each hit a distinct open dyn-drvs bug
+      # (nix/packages/{zstd,mosh,openssl,tinycbor}.nix) and run
+      # informationally below instead, so this job's pass/fail tracks
+      # regressions in the proven path, not upstream bugs it can't fix.
       - name: Build proven dyndrv packages (freetype, giflib)
         run: |
           for attr in dyndrv-freetype dyndrv-giflib; do
@@ -124,14 +124,14 @@ jobs:
           auto-push: true
 
       # Informational: won't fail the job, just flags when a dyn-drvs fix lands.
-      - name: "Blocked tiers (informational, non-blocking): zstd, mosh"
+      - name: "Blocked tiers (informational, non-blocking): zstd, mosh, tinycbor"
         continue-on-error: true
         run: |
           {
             echo "### Blocked-tier status (see nix/packages/*.nix)"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
-          for attr in dyndrv-zstd dyndrv-mosh; do
+          for attr in dyndrv-zstd dyndrv-mosh dyndrv-tinycbor; do
             echo "::group::Attempting .#$attr (expected to fail, see nix/packages/$attr.nix)"
             if ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
                 ".#$attr" > "/tmp/$attr.log" 2>&1; then

@@ -13,9 +13,12 @@ Live benchmark dashboard: <https://nix-dyn-drv.github.io/overlay/benchmarks/dash
 ## The headline number
 
 nixgg's mechanism rebuilds only 2 of openssl's 2213 translation units on
-a one-line patch. dyn-drvs' mechanism, applied to freetype, is 17x
-*slower* than a plain rebuild — per-TU acceleration only pays off when
-each unit costs more to compile than the ~80ms registration overhead.
+a one-line patch. dyn-drvs' mechanism builds clean on freetype and
+giflib, but freetype's patch-rebuild is 17x *slower* than a plain
+rebuild — per-TU acceleration only pays off when each unit costs more to
+compile than the ~80ms registration overhead. A wider survey against
+xxHash/re2/libb64/mpfr/tinycbor found three more distinct dyn-drvs bugs
+beyond the four already documented; see `benchmarks/RESULTS.md`.
 
 ## Quickstart
 
