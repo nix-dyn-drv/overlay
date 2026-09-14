@@ -10,6 +10,7 @@ env:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   build:
@@ -21,6 +22,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # trynix (below) evaluates .#dyndrv-* attrs via a plain,
+          # daemon-mediated `nix eval` -- unlike run-nix-ci.sh's own
+          # patched-Nix + `sudo`+`--store local` path, which the ambient
+          # ecosystem's post-install daemon config doesn't grant. A
+          # per-invocation `--extra-experimental-features` flag can't
+          # retroactively grant these to an already-running daemon; only
+          # the daemon's own nix.conf at install time can (same fix
+          # dyn-drvs' own CI needed, "ci: enable ca-derivations/
+          # dynamic-derivations on the ambient nix-daemon"). This does
+          # NOT grant builder-rpc-v0 -- only the patched-Nix path used
+          # elsewhere in this workflow can build a dynamic derivation;
+          # this just lets ordinary tooling (trynix) eval/resolve one
+          # that's already built and cached.
+          extra-conf: |
+            extra-experimental-features = nix-command flakes ca-derivations dynamic-derivations recursive-nix
 
       # Pull-only, no token needed -- works for fork PRs too, since the
       # cache is public-readable. Push (below) is separate and gated on
@@ -34,18 +51,37 @@ jobs:
       - name: Verify run-nix-ci.sh can fetch+build a working Nix
         run: ./try-it-out/run-nix-ci.sh --version
 
-      # Tier 0 (freetype, giflib) are the dyn-drvs packages that build
-      # clean end to end (benchmarks/RESULTS.md); hard gate here.
-      # zstd/mosh/openssl/tinycbor each hit a distinct open dyn-drvs bug
-      # (nix/packages/{zstd,mosh,openssl,tinycbor}.nix) and run
-      # informationally below instead, so this job's pass/fail tracks
-      # regressions in the proven path, not upstream bugs it can't fix.
-      - name: Build proven dyndrv packages (freetype, giflib)
+      # Tier 0 (freetype, giflib, tree, figlet, nnn) are the dyn-drvs
+      # packages that build clean end to end (benchmarks/RESULTS.md);
+      # hard gate here. zstd/mosh/openssl/tinycbor each hit a distinct
+      # open dyn-drvs bug (nix/packages/{zstd,mosh,openssl,tinycbor}.nix)
+      # and run informationally below instead, so this job's pass/fail
+      # tracks regressions in the proven path, not upstream bugs it
+      # can't fix.
+      - name: Build proven dyndrv packages (freetype, giflib, tree, figlet, nnn)
         run: |
-          for attr in dyndrv-freetype dyndrv-giflib; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/$attr.log"
+            echo "::endgroup::"
+          done
+
+      # nix-ninja (mkMesonPackage) and drowse (callPackage) are two more
+      # independent dynamic-derivations mechanisms, same patched-Nix path
+      # as the dyn-drvs tier above. nix-ninja intermittently hits a
+      # real-/nix/store-only failure not reproduced against the
+      # redirected alt-store locally (ninja's own generated "install"
+      # step runs and writes to mkMesonPackage's literal `/nonexistent`
+      # placeholder) -- informational until root-caused, so it doesn't
+      # block regressions in drowse or the proven dyndrv tier above.
+      - name: "Build nix-ninja and drowse mechanisms (argp-standalone, hello)"
+        continue-on-error: true
+        run: |
+          for attr in nixninja-argp drowse-hello; do
+            echo "::group::Building .#$attr"
+            ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+              ".#$attr" 2>&1 | tee "/tmp/$attr.log" || true
             echo "::endgroup::"
           done
 
@@ -74,7 +110,7 @@ jobs:
         run: |
           RUN_NIX=./try-it-out/run-nix-ci.sh \
             ./benchmarks/patch-rebuild.sh \
-              packages.x86_64-linux.dyndrv-freetype \
+              packages.x86_64-linux.dyndrv-freetype-baseline \
               packages.x86_64-linux.dyndrv-freetype \
               | tee /tmp/freetype-bench.log
 
@@ -158,3 +194,22 @@ jobs:
           done
           OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
           echo "$OUT" | cachix push "$CACHIX_CACHE"
+          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn nixninja-argp drowse-hello; do
+            OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
+            [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
+          done
+
+      # Reviewer convenience: post a PR comment with a "boot this build in
+      # your browser" link (trynix.dev, in-browser QEMU + WASM) for a
+      # proven, already-cached package -- no relation to the
+      # dynamic-derivations mechanism itself, just a UX add-on over the
+      # Cachix push above. Same same-repo gate as the push itself, since
+      # a fork PR never pushed anything for trynix to find in the cache.
+      - name: Post trynix boot link (PR comments only)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: fzakaria/trynix@v1
+        with:
+          cache: https://dynamicderivations.cachix.org
+          publicKey: dynamicderivations.cachix.org-1:AmDuQASmWJsVYB/r0TGTZnQSnoxPzKP8ijfGw/6aT3k=
+          attrs: .#dyndrv-giflib
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
