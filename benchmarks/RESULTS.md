@@ -46,6 +46,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
 | x265 (~99 TUs) | cold build | **BLOCKED** | -- | -- | Originally reported INCONCLUSIVE (a pre-existing plain-nixpkgs nasm `label-redef-late` error assembling `common/x86/intrapred16.asm`, confirmed by an A/B rebuild independent of `mkAcceleratedStdenv`). Retested and that nasm error did NOT recur -- all ~92 real `.asm.o` files (including `intrapred16.asm`) now assemble successfully. Then genuinely BLOCKED by the ar/ranlib `inputs.drvs` gap (same bug as libwebp/openjpeg: `ar: /nix/store/<hash>-analysis.cpp.o: No such file or directory`), **FIXED by dyn-drvs 28af81d** -- confirmed both `libx265_a.a`/`libhdr10plus_a.a` archive steps now succeed for real. NOW BLOCKED by a third, distinct bug: the `libx265.so` shared-lib link fails with `ld.bfd: cannot find -lx265-10: No such file or directory` / `cannot find -lx265-12`. Unlike every other bug found in this survey's `ar`/`cc` shims, this one isn't a literal store-path argv token that went unresolved -- x265's cmake build links its 10-bit/12-bit encoder variants via a bare `-Wl,-Bstatic -lx265-10 -lx265-12` (search-path-relative `-l<name>`, not a full path), which none of discoverTree/extraStorePaths/28af81d's scanning machinery has any way to resolve back to the dynamic derivation that will produce those `.a` files. Not fixed by dyn-drvs dc07a0a either (confirmed via direct retest) -- dc07a0a's fix only unglues an already-literal `-Wl,`-style path, it doesn't add `-l<name>` resolution. Details in `nix/packages/x265.nix`. |
+| openjpeg (~76 TUs, cmake, 2-output) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 28af81d) | -- | Retested against dyn-drvs 28af81d ("Fix ar shim: declare its own real .o/archive inputs as derivation deps"): `dyndrv-openjpeg` now builds clean end to end -- real `libopenjp2.so`/`bin/opj_decompress`/`bin/opj_compress`/etc, verified as genuine ELF binaries. Previously (last tested against dyn-drvs 0d233d3) every real per-TU compile succeeded but the first `ar`-driven static-lib link failed: `ar: /nix/store/<hash>-thread.c.o: No such file or directory`, `nix derivation show` confirming `inputs.drvs = {}` for the `ar` derivation -- `arToNode`/`ranlibToNode` never scanned their own positional args for resolved store paths the way `ccToNode`'s `extraStorePaths` already did; 28af81d fixes exactly this. Details in `nix/packages/openjpeg.nix`. |
 | capnproto (~187 .c++ TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 0d233d3) | -- | Retested against dyn-drvs 0d233d3 ("Fix phases.split cmake+make out-of-tree install failure (task #138)"): `dyndrv-capnproto` now builds clean end to end -- real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`libkj-async.so`/etc and `bin/capnp`/`bin/capnpc-c++`/`bin/capnpc-capnp` all present, `capnp --version` prints `Cap'n Proto version 1.4.0`. Previously (as last tested against dyn-drvs 227b1a6) every real per-TU compile AND link succeeded (`buildPhase completed in 39 seconds`) but `installPhase` failed: `CMake Error: The source directory "/build/source" does not exist` / `make: *** [Makefile:383: cmake_check_build_system] Error 1` -- distinct from the compile-time discoverTree cmake-source-path bug (tinycbor/xxHash/re2): `phases.split`'s phase 2 forced `sourceRoot = "."`, so its `unpackPhase` never recreated the `/build/source` subdirectory cmake's own cached `CMAKE_HOME_DIRECTORY` (baked into `CMakeCache.txt` at phase 1 configure time) still pointed at -- the existing `dyndrvCdToBuildDir` reconstruction logic previously only triggered for meson's `build.ninja` marker, never for cmake+make; 0d233d3 generalizes it to cmake+make too. (Package itself still required a package-level workaround just to eval: nixpkgs' by-name `capnproto` takes a `clangStdenv` argument, not `stdenv`, since GCC ICEs on its C++20 coroutines -- worked around here by accelerating `clangStdenv` directly.) Details in `nix/packages/capnproto.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
@@ -94,6 +95,19 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
+   inputs as `inputs.drvs`** (openjpeg) -- unlike `ccToNode`'s
+   `extraStorePaths`/`findAllStorePaths` scan (which greps every argv
+   element for a literal store-path substring and folds it into the
+   deferred record's own `srcs`), neither the `ar` nor `ranlib` shim has
+   an equivalent scan over their own positional inputs. Once an earlier
+   compile's `.o` output resolves to a real store path, `ar`'s own
+   record never picks it up, so the registered `ar`/link derivation ends
+   up with an empty `inputs.drvs` and the sandbox has no access to a
+   `.o` it never declared (`ar: /nix/store/<hash>-thread.c.o: No such
+   file or directory`, confirmed via `nix derivation show`). Distinct
+   from bug #3 above (that fix only touched `cc`/`c++`'s own scan; `ar`/
+   `ranlib` are a separate code path that was never given one at all).
 5. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
    absolute source directory** (capnproto) -- every real per-TU compile
    and link succeeded, but `installPhase` then failed outright
@@ -156,6 +170,13 @@ flake outputs; not package-fixable at this layer):
   handling.
 - **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
   `libmpfr.so` link step, identical shape to pcre2).
+- **mpfr: FAIL, confirms known bug #3** (`.libs/*.o` not found at the
+  `libmpfr.so` link step, identical shape to pcre2).
+- **openjpeg: FAIL, new bug (#5 above).** See `dyndrv-openjpeg` in the
+  table above -- `arToNode`/`ranlibToNode` never wire their own `.o`
+  positional inputs as real `inputs.drvs`, so the first real static-lib
+  link fails outright once its inputs are genuinely resolved dynamic
+  derivations.
 - **libpng, libtasn1: FAIL, same new bug on both.** Fails immediately at
   phase 1 setup, before any compile runs: `error: _assignFirst: could
   not find a non-empty variable whose name to assign to outputMan. The
@@ -182,6 +203,7 @@ figlet, nnn) is a plain, hand-written Makefile with no `configure`
 script and no cmake -- the autotools depcomp idiom and cmake's
 generated build systems are both, independently, landmines for this
 mechanism as currently implemented.
+
 
 ## The break-even lesson
 
