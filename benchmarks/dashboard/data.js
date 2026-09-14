@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789416726348,
+  "lastUpdate": 1789423306031,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -608,6 +608,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.56,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6e20f9fc85d52bc4fb378b4c63da5d1c2a1ebef5",
+          "message": "Merge pull request #16 from nix-dyn-drv/fix-trynix-build-flag\n\nci: fix trynix openssl-ordering race with build: true",
+          "timestamp": "2026-09-14T17:42:35-04:00",
+          "tree_id": "d1af7dc3de8aae01ed3a6eecad936a4b79d1eefc",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/6e20f9fc85d52bc4fb378b4c63da5d1c2a1ebef5"
+        },
+        "date": 1789423304905,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.6,
             "unit": "x"
           }
         ]
