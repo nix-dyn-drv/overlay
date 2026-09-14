@@ -30,7 +30,9 @@ acceleration only pays off when each unit costs more to compile than the
 nixpkgs packages found five more distinct dyn-drvs bugs beyond the four
 already documented — every failure traced back to either autotools'
 dependency-tracking idiom or cmake's generated build systems, while
-every clean pass used a plain, hand-written Makefile. Two more
+every clean pass used a plain, hand-written Makefile. leveldb (cmake,
+~39 real TUs) confirms the same cmake-source-path bug a fourth time, at
+a 100% failure rate — the worst case seen so far. Two more
 independent libraries, nix-ninja and drowse, each demonstrate a
 genuinely different angle on the same underlying feature: nix-ninja
 turns a meson-generated `build.ninja`'s real build graph into per-TU
