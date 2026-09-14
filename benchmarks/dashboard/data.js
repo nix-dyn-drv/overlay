@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789353902499,
+  "lastUpdate": 1789356290866,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -260,6 +260,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 1,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "beb36f85906efb53cadee0e1655d3563358ed998",
+          "message": "Fix freetype benchmark comparing dyndrv-freetype against itself, remeasure\n\nCI's freetype patch-rebuild benchmark step passed the same attr\n(dyndrv-freetype) as both the \"plain\" and \"accelerated\" side of\npatch-rebuild.sh, so every recorded ratio was ~1.0x (confirmed in the\nlive gh-pages dashboard data) -- not a real plain-vs-accelerated\ncomparison at all. The README/RESULTS.md \"17x slower\" figure was never\nactually measured in this repo either; it's dyn-drvs' own BASELINE.md\nnumber for a different scenario (one-file patch rebuild, not cold\nbuild), cited without re-verification.\n\nAdded dyndrv-freetype-baseline (plain pkgs.freetype) as the real\ncomparison point, fixed both ci.yml and nightly.yml to use it, and\nre-measured directly: cold build is 0.15x (~6.7x slower), consistent\nacross two runs (11.8-11.9s plain vs 77-81s accelerated, 93 dynamic\nderivations registered). Updated README/RESULTS.md to cite this\nrepo's own honest number instead of an uncredited borrowed one.",
+          "timestamp": "2026-09-13T23:14:05-04:00",
+          "tree_id": "6ea1867007973c044f7adee9b17e344c033ff216",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/beb36f85906efb53cadee0e1655d3563358ed998"
+        },
+        "date": 1789356290100,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.6,
             "unit": "x"
           }
         ]
