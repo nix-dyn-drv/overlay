@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789405307876,
+  "lastUpdate": 1789405360480,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -521,6 +521,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.62,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e855aef35464cf218a993465f085ad622a486ac9",
+          "message": "Merge pull request #13 from nix-dyn-drv/openjpeg-package\n\nAdd openjpeg (cmake, ~76 TUs) -- PASS, fixed upstream by dyn-drvs 28af81d",
+          "timestamp": "2026-09-14T12:43:48-04:00",
+          "tree_id": "a0eadde805ffa014636c8828fb1d163e4e85d309",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/e855aef35464cf218a993465f085ad622a486ac9"
+        },
+        "date": 1789405359394,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.6,
             "unit": "x"
           }
         ]
