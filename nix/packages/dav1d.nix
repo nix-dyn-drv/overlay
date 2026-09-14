@@ -1,70 +1,60 @@
 # dav1d -- meson build (not cmake or autotools). Tried per explicit
 # instruction despite being RULED OUT ahead of time on paper -- same
 # caveat as x264: dyn-drvs has no meson-specific tooling, only generic
-# cc/ar argv-sniffing shims. meson's own build backend is ninja, so every
-# real compile/link still ultimately runs through plain `cc`/`ar`
-# invocations the way an autotools or cmake build would; nothing
-# meson-SPECIFIC should matter to `discoverTree`/`collectStubs` in
-# principle. In practice, dav1d fails before a single real TU compiles,
-# hitting a NEW `ar`-shim bug, distinct from all five documented in
-# `~/dyn-drvs/docs/*.md`.
+# cc/ar argv-sniffing shims.
 #
-# RESULT: BLOCKED. Fails during meson's own `configurePhase`, before
-# `buildPhase` starts:
+# ORIGINALLY BLOCKED: failed during meson's own `configurePhase`, before
+# `buildPhase` started:
 #
 # ```
 # meson.build:25:0: ERROR: Unknown linker(s): [['ar']]
 # ```
 #
-# Root cause: meson's own linker-detection probe (part of every native
-# build's `configurePhase`, unconditional -- unrelated to dav1d's own
-# `meson.build`) runs `ar --version` to identify which archiver flavor
-# `$AR` resolves to (GNU ar vs. llvm-ar vs. MSVC lib.exe etc., branching
-# on the probe's real stdout/stderr/exit code -- see nixpkgs' vendored
-# `mesonbuild/compilers/detect.py`, `defaults['static_linker']` probing
-# with `arg = '--version'`). `mkAcceleratedStdenv.nix`'s `arShim`
-# (`arToNode` in that file) has NO passthrough/probe-detection case at
-# all -- its own header comment (~line 1007) says so explicitly: "ALWAYS
-# defers -- there is no passthrough case for `ar` ... if one ever does,
-# it would need the same absolute-path check `cc`'s `toNode` uses."
-# `arToNode` unconditionally assumes argv[0] is the modifiers string and
-# argv[1] is the archive path (`inputs = genList (...) (len - 2)`); a
-# 1-arg probe invocation like `ar --version` makes `len - 2 = -1`, and
-# `builtins.genList` throws outright on a negative size:
+# Root cause: meson's own linker-detection probe runs `ar --version` to
+# identify which archiver flavor `$AR` resolves to. `mkAcceleratedStdenv
+# .nix`'s `arShim` (`arToNode`) had NO passthrough/probe-detection case
+# at all and unconditionally assumed argv[0]/argv[1] were modifiers/
+# archive-path (`inputs = genList (...) (len - 2)`); a 1-arg probe
+# invocation like `ar --version` made `len - 2 = -1`, and
+# `builtins.genList` threw outright on a negative size (`error: cannot
+# create list of size -1`).
+#
+# FIXED upstream in dyn-drvs 227b1a6 ("Fix ar/ranlib shims crashing/
+# misclassifying on version-probe invocations") -- confirmed directly:
+# `configurePhase` now succeeds, and the real ninja build starts, with
+# dozens of real dav1d TUs (cdef_tmpl, ipred_tmpl, mc_tmpl, msac, obu,
+# picture, etc.) actually compiling.
+#
+# NOW BLOCKED by a different, new bug, further into the build: a real
+# (non-probe) compile fails with
 #
 # ```
-# error: cannot create list of size -1
+# gcc: error: unrecognized command-line option '-Wshorten-64-to-32'
 # ```
 #
-# Confirmed directly: extracted the actual generated `ar` wrapper script
-# from a real sandboxed build attempt (`nix derivation show`'d the
-# `dav1d` phase-1 `.drv`, found the `dyndrv-cc-shim` input, ran its
-# `bin/ar --version` standalone) -- reproduces the identical
-# `nix-instantiate` failure ("cannot create list of size -1") outside
-# meson entirely, isolating this to `arToNode`'s own argv-shape
-# assumption, not anything meson- or dav1d-specific. meson swallows the
-# nested Nix error and reports it up as its own generic "Unknown
-# linker(s)" message, since from meson's point of view the probe process
-# just exited non-zero with no usable stdout.
-#
-# Why this didn't surface on giflib/tree/figlet/nnn/zstd/mosh/tinycbor:
-# none of those build systems ever probe `ar --version`/`-h`/`-?`
-# standalone the way meson's own linker-detection step does -- a plain
-# Makefile's `$(AR) cr lib.a *.o` or cmake's generated archive rule
-# always passes real modifiers + a real archive path, matching
-# `arToNode`'s assumed 2-plus-positional-args shape. This is the FIRST
-# meson-based package this survey has tried against
-# `accelerate.mkAcceleratedStdenv`.
+# Root cause: dav1d's `meson.build` does a `cc.get_supported_arguments
+# ([..., '-Wshorten-64-to-32'])` compiler-flag-support probe (a
+# Clang-only flag GCC rejects) using meson's own `testfile.<ext>`/
+# `sanitycheck*` probe naming convention -- which isn't caught by any of
+# `mkAcceleratedStdenv.nix`'s `isProbe` heuristics (`isConftest`
+# recognizes autoconf's naming, `isCMakeProbe` recognizes CMake's,
+# neither recognizes meson's), since the invocation has a real `-c` flag
+# and a real positional source. So the probe gets deferred into a
+# batched node that always reports success, meson concludes GCC
+# supports the flag, bakes it into every real TU's compile flags, and
+# every real `cc -c ... .c` invocation genuinely fails on that
+# unrecognized option. A third, distinct dyn-drvs bug (meson
+# non-conftest-named flag-support probes not recognized as
+# passthrough-eligible), unrelated to the ar-probe-crash bug that's now
+# fixed.
 #
 # Not a package-level fix: no `mesonFlags`/`postPatch` on dav1d's own
-# side can skip meson's own linker-detection probe (it's unconditional,
-# happens before any user-controlled build option is read at all), and
-# this repo's role is to document findings, not patch dyn-drvs. A real
-# fix belongs in `arToNode` itself: recognize a probe invocation (e.g.
-# fewer than 2 positional args, or a leading `-`/`--` flag where a plain
-# modifiers-string is expected) and pass it through synchronously to the
-# real `ar`, mirroring `toNode`'s own `isConftest`/`isCMakeProbe`/
-# `isInfoQuery` passthrough logic for `cc`.
+# side can skip meson's own flag-support probe (unconditional, part of
+# its own `meson.build`), and this repo's role is to document findings,
+# not patch dyn-drvs. A real fix belongs in `toNode`'s `isProbe`
+# detection: recognize meson's own probe naming convention
+# (`testfile.<ext>`/`sanitycheck*`), mirroring the existing
+# `isConftest`/`isCMakeProbe` cases.
 
 {
   pkgs,
