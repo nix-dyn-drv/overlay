@@ -1,50 +1,40 @@
 # libwebp -- BLOCKED. Single-output (`out`), cmake-based, ~171 TUs -- picked
 # specifically to avoid the multi-output gaps hit elsewhere (openssl's
-# `finalPackage`, libpng/libtasn1's `outputBin`), but it hits the SAME
-# `discoverTree` cmake-source-path bug already tracked in
-# ~/dyn-drvs/docs/discovertree-cmake-source-path-bug.md (xxHash, re2,
-# and this repo's own tinycbor).
+# `finalPackage`, libpng/libtasn1's `outputBin`).
 #
-# Every real per-TU compile across every one of libwebp's cmake targets
-# fails identically:
+# Originally hit the discoverTree cmake-source-path bug already tracked
+# in ~/dyn-drvs/docs/discovertree-cmake-source-path-bug.md (xxHash, re2,
+# tinycbor): every real per-TU compile failed identically with
 #
 #   cc1: fatal error: /build/source/examples/dwebp.c: No such file or directory
-#   compilation terminated.
 #
-# ...repeated for `imageio/image_dec.c`, `src/mux/muxread.c`,
-# `sharpyuv/sharpyuv_dsp.c`, `src/dec/buffer_dec.c`,
-# `src/demux/anim_decode.c`, and every other TU across libwebp's several
-# cmake targets (webpdecode/webpencode/webpdsp/webpdspdecode/
-# webpdemux/libwebpmux/sharpyuv/dwebp/imagedec/...). Confirmed via
-# `nix derivation show` on one failing per-TU `.drv`
-# (`dyndrv-CMakeFiles_dwebp_dir_examples_dwebp_c_o.drv`): the actual `cc`
-# invocation is `cc ... '-Isrc' '-I/build/source/src' ... -o $out -c
-# '/build/source/examples/dwebp.c'`, but inspecting the per-TU sandbox's
-# staged `dyndrv-tree` shows it materialized only `src/` (plus
-# `CMakeFiles/dwebp.dir/examples/` -- an empty directory skeleton, no
-# `.c` file) -- and, tellingly, a literal top-level directory NAMED `-I`
-# containing `build/source` as a nested path. That confirms `discoverTree`
-# is misparsing one of the `-I<path>` flags as a *file* path component to
-# stage (splitting on/staging the flag text itself) rather than resolving
-# `/build/source/examples/dwebp.c`, the actual `-c` positional source
-# argument, at all -- so `examples/`, `imageio/`, `sharpyuv/`,
-# `src/mux/`, `src/dec/`, `src/demux/` (every source subdirectory besides
-# the one the scan happened to get partially right) never get staged,
-# and every TU whose primary source lives in one of them fails identically
-# to xxHash/re2/tinycbor.
+# FIXED upstream in dyn-drvs 97a987d ("discoverTree: cmake's -MT/-MF
+# values misidentified as the source file") -- confirmed directly: every
+# per-TU compile across every one of libwebp's cmake targets now
+# succeeds (no more "No such file or directory" for any TU).
 #
-# Root cause: same as `discovertree-cmake-source-path-bug.md` --
-# `discoverTree`'s per-TU sandbox staging can't reliably resolve a cmake-
-# generated compile invocation's absolute in-sandbox source path
-# (`/build/source/<subdir>/<file>.c`) back to the right relative subtree,
-# for libwebp's specific mix of top-level (`examples/`, `imageio/`,
-# `sharpyuv/`) and nested (`src/dec/`, `src/enc/`, `src/dsp/`,
-# `src/mux/`, `src/demux/`) source layout. Not package-fixable at this
-# layer (no `cmakeFlags`/`postPatch` changes libwebp's own cmake project
-# layout enough to dodge this -- the bug is in how `discoverTree` stages
-# files, not in libwebp's own build description). Left here (not deleted)
-# as a fourth confirmed instance of the same open bug, on yet another
-# real nixpkgs source-tree shape.
+# NOW BLOCKED by a different, new bug, at the archive step: `ar: /nix/
+# store/<hash>-example_util.c.o: No such file or directory` /
+# `ranlib: '/nix/store/<hash>-dyndrv-libexampleutil_a': No such file`
+# (also reproduced against a different object on a second run,
+# `image_dec.c.o`). `nix derivation show` on the failing `.drv` confirms
+# `inputs.drvs = {}` -- the compiled `.o`'s producing derivation is never
+# wired as a real build dependency, only referenced as a literal
+# store-path string in `args`, so Nix schedules/builds the `ar` step
+# before (or without ever building) its object-file dependency. This
+# looks like a cross-unit dependency-wiring gap in
+# `nix/lib/shim/collectStubs.nix` (the generic dependency-discovery/
+# unit-merging pass), distinct from both the now-fixed cmake-source-path
+# bug and the separately-fixed ar/ranlib probe-crash bug (227b1a6) --
+# this is a real static-lib link with real inputs, not a version probe.
+#
+# Not package-fixable at this layer (the dependency-wiring gap is in how
+# collectStubs resolves `ar`'s own positional `.o` inputs into real
+# `inputs.drvs`, not something libwebp's own cmake project controls).
+# Left here (not deleted) as real forward progress from the original
+# cmake-source-path bug, now confirmed a fourth instance of THIS
+# different ar/ranlib dependency-wiring bug (also seen on x265,
+# openjpeg).
 
 {
   pkgs,
