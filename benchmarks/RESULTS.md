@@ -45,6 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
+| capnproto (~187 .c++ TUs) | cold build | all TUs compiled+linked | **BLOCKED** (at install, not compile) | -- | Every real per-TU compile AND link succeeds (`buildPhase completed in 39 seconds`, real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`capnp` all built) -- but `installPhase` then fails: `CMake Error: The source directory "/build/source" does not exist` / `make: *** [Makefile:383: cmake_check_build_system] Error 1`. A NEW bug, distinct from the compile-time discoverTree cmake-source-path bug (tinycbor/xxHash/re2): `phases.split`'s phase 2 forces `sourceRoot = "."`, so its `unpackPhase` never recreates the `/build/source` subdirectory cmake's own cached `CMAKE_HOME_DIRECTORY` (baked into `CMakeCache.txt` at phase 1 configure time) still points at -- the existing `dyndrvCdToBuildDir` reconstruction logic only triggers for meson's `build.ninja` marker, never for cmake+make. (Package itself required a package-level workaround just to eval: nixpkgs' by-name `capnproto` takes a `clangStdenv` argument, not `stdenv`, since GCC ICEs on its C++20 coroutines -- worked around here by accelerating `clangStdenv` directly.) Details in `nix/packages/capnproto.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -64,7 +65,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Four bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Five bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -92,6 +93,18 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`phases.split`'s phase 2 never reconstructs a cmake+make build's
+   absolute source directory** (capnproto) -- every real per-TU compile
+   and link succeeds, but `installPhase` then fails outright
+   (`CMake Error: The source directory "/build/source" does not exist`)
+   because phase 2 forces `sourceRoot = "."`, and the existing
+   "reconstruct phase 1's absolute build-dir position" logic
+   (`dyndrvCdToBuildDir`) only fires when it finds meson's own
+   `build.ninja` marker, never for a cmake-generated `Makefile`'s cached
+   `CMAKE_HOME_DIRECTORY`. Distinct from the compile-time discoverTree
+   cmake-source-path bug below (tinycbor/xxHash/re2) -- this one is an
+   install-time failure that happens even after every compile/link
+   already succeeded for real.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README

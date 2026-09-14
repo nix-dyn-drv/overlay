@@ -26,19 +26,21 @@ a one-line patch. dyn-drvs' mechanism builds clean on freetype, giflib,
 tree, figlet, and nnn, but freetype's cold build is ~6.7x *slower* than
 a plain rebuild (0.15x, measured directly in this repo) — per-TU
 acceleration only pays off when each unit costs more to compile than the
-~80ms registration overhead. A wider survey against eight more real
-nixpkgs packages found five more distinct dyn-drvs bugs beyond the four
-already documented — every failure traced back to either autotools'
-dependency-tracking idiom or cmake's generated build systems, while
-every clean pass used a plain, hand-written Makefile. Two more
-independent libraries, nix-ninja and drowse, each demonstrate a
-genuinely different angle on the same underlying feature: nix-ninja
-turns a meson-generated `build.ninja`'s real build graph into per-TU
-derivations (`nixninja-argp`, real `libargp.a` verified); drowse defers
-a whole package's *evaluation* into a nested `nix-instantiate` instead
-of splitting its *build* (`drowse-hello`, real runnable `hello` binary)
-— the "avoid IFD" half of the story, not fine-grained caching. See
-`benchmarks/RESULTS.md`.
+~80ms registration overhead. A wider survey against nine more real
+nixpkgs packages found six more distinct dyn-drvs bugs beyond the four
+already documented — every failure traced back to autotools'
+dependency-tracking idiom, cmake's generated build systems, or (newest:
+capnproto) `phases.split`'s phase 2 never reconstructing a cmake+make
+build's absolute source directory, even after every real per-TU compile
+and link already succeeded — while every clean pass used a plain,
+hand-written Makefile. Two more independent libraries, nix-ninja and
+drowse, each demonstrate a genuinely different angle on the same
+underlying feature: nix-ninja turns a meson-generated `build.ninja`'s
+real build graph into per-TU derivations (`nixninja-argp`, real
+`libargp.a` verified); drowse defers a whole package's *evaluation* into
+a nested `nix-instantiate` instead of splitting its *build*
+(`drowse-hello`, real runnable `hello` binary) — the "avoid IFD" half of
+the story, not fine-grained caching. See `benchmarks/RESULTS.md`.
 
 ## Quickstart
 
