@@ -45,7 +45,9 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
-| leveldb (~39 real TUs) | cold build | **BLOCKED** | -- | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1plus: fatal error: db/c.cc: No such file or directory`, a fourth confirmed instance) is fixed upstream (dyn-drvs 97a987d) -- confirmed all 39 real per-TU compiles now succeed, plus `make install` (cmake+make's own install-time error, separately fixed by dyn-drvs 0d233d3, also doesn't recur). Now blocked by a second confirmation of the already-documented `split-postinstall-before-restore-bug.md`: leveldb's `postInstall` runs `substituteInPlace "$out"/lib/cmake/leveldb/leveldbTargets.cmake ...`, which fails with `substitute(): ERROR: file '.../leveldbTargets.cmake' does not exist` -- `postInstall` fires inside nixpkgs' `installPhase` itself, strictly before `phases.split`'s `dyndrvRestoreOutput` phase copies the placeholder-rooted tree into the real `$out`. Confirmed still open against dyn-drvs dc07a0a (retested directly, unaffected -- unrelated to that fix's `-Wl,`-unglue mechanism). Details in `nix/packages/leveldb.nix`. |
+| leveldb (~39 real TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 0d233d3 + 1347c8c) | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1plus: fatal error: db/c.cc: No such file or directory`, a fourth confirmed instance) is fixed upstream (dyn-drvs 97a987d) -- confirmed all 39 real per-TU compiles now succeed, plus `make install` (cmake+make's own install-time error, separately fixed by dyn-drvs 0d233d3, also doesn't recur). Was then blocked by a second confirmation of the already-documented `split-postinstall-before-restore-bug.md`: leveldb's `postInstall` runs `substituteInPlace "$out"/lib/cmake/leveldb/leveldbTargets.cmake ...`, which failed with `substitute(): ERROR: file '.../leveldbTargets.cmake' does not exist` -- `postInstall` fires inside nixpkgs' `installPhase` itself, strictly before `phases.split`'s `dyndrvRestoreOutput` phase copies the placeholder-rooted tree into the real `$out`. Confirmed still open against dyn-drvs dc07a0a (unrelated to that fix's `-Wl,`-unglue mechanism). **FIXED upstream in dyn-drvs 1347c8c** ("Fix phases.split: dyndrvRestoreOutput ran too late for postInstall reading $out (task #140)") -- confirmed directly: `dyndrv-leveldb` now builds clean end to end, real `libleveldb.so.1.23.0` verified as a genuine ELF binary, and the previously-missing `leveldbTargets.cmake` now exists in the real `-dev` output. Details in `nix/packages/leveldb.nix`. |
+| x264 | cold build | -- | pass (with 2 package-level workarounds) | -- | Autotools-style `./configure` + hand-written Makefile (NOT cmake -- explicitly ruled out ahead of time as a cmake candidate, tried anyway per instruction). Hit two NEW dyn-drvs bugs: (1) x264's own `configure` probes `gcc-ranlib --version`/`gcc-ar --version` for LTO-plugin detection, and the `ar`/`ranlib` shims (unlike `cc`'s) have no info-query passthrough, so the probe gets deferred and misparses `--version` as the archive-to-ranlib-in-place, registering a bogus `dyndrv-__version` stub that fails outright; (2) once patched around, real compiles and a real `cc`-driven `libx264.so.165` link both succeed (notably NOT hitting the open zstd/pcre2/mpfr discoverTree link-step bug), but `phases.split`'s single-output phase 1 makes nixpkgs' own `multiple-outputs.sh` fall back `outputLib -> out`, so x264's real `--libdir` content lands under phase 1's `$out/lib` and `dyndrvRestoreOutput`'s `_multioutDevs`/`_multioutDocs` calls never redistribute it into the real `$lib` output, so `$lib` is never created. Both worked around at the package level (postPatch to skip the probe, preFixup to move `$out/lib` into `$lib/lib`); real, runnable `bin/x264` confirmed (`x264 --version`). RETESTED against dyn-drvs 227b1a6/97a987d: still pass, both workarounds still required -- 227b1a6's own `isProbe` fix doesn't cover x264's specific `gcc-ranlib --plugin <path> --version` probe shape (the plugin path is itself a non-flag positional argument). Details in `nix/packages/x264.nix`. |
+| libwebp (~171 TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 28af81d + dc07a0a) | -- | Single-output, cmake build -- picked specifically to dodge the multi-output gaps (openssl/libpng). Hit THREE distinct, sequentially-uncovered bugs on the way to a real pass: (1) cmake-source-path bug (every real TU compile failing identically, e.g. `cc1: fatal error: /build/source/examples/dwebp.c: No such file or directory`), fixed by dyn-drvs 97a987d; (2) `ar`/`ranlib` archive step failing with `ar: /nix/store/<hash>-example_util.c.o: No such file or directory` (`inputs.drvs = {}`, same shape as openjpeg), fixed by dyn-drvs 28af81d; (3) a `cc -shared` link step failing with `ld.bfd: cannot open dependency file CMakeFiles/webpdecoder.dir/link.d: No such file or directory` (wrapCommand's output-dirname precreation not unglueing `-Wl,`-style flags first), fixed by dyn-drvs dc07a0a. Retested against dc07a0a: `dyndrv-libwebp` now builds clean end to end -- real `libwebp.so.7.2.0`/`bin/cwebp`/`bin/dwebp` etc, verified as genuine ELF binaries. See `nix/packages/libwebp.nix`. |
 | openjpeg (~76 TUs, cmake, 2-output) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 28af81d) | -- | Retested against dyn-drvs 28af81d ("Fix ar shim: declare its own real .o/archive inputs as derivation deps"): `dyndrv-openjpeg` now builds clean end to end -- real `libopenjp2.so`/`bin/opj_decompress`/`bin/opj_compress`/etc, verified as genuine ELF binaries. Previously (last tested against dyn-drvs 0d233d3) every real per-TU compile succeeded but the first `ar`-driven static-lib link failed: `ar: /nix/store/<hash>-thread.c.o: No such file or directory`, `nix derivation show` confirming `inputs.drvs = {}` for the `ar` derivation -- `arToNode`/`ranlibToNode` never scanned their own positional args for resolved store paths the way `ccToNode`'s `extraStorePaths` already did; 28af81d fixes exactly this. Details in `nix/packages/openjpeg.nix`. |
 | capnproto (~187 .c++ TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 0d233d3) | -- | Retested against dyn-drvs 0d233d3 ("Fix phases.split cmake+make out-of-tree install failure (task #138)"): `dyndrv-capnproto` now builds clean end to end -- real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`libkj-async.so`/etc and `bin/capnp`/`bin/capnpc-c++`/`bin/capnpc-capnp` all present, `capnp --version` prints `Cap'n Proto version 1.4.0`. Previously (as last tested against dyn-drvs 227b1a6) every real per-TU compile AND link succeeded (`buildPhase completed in 39 seconds`) but `installPhase` failed: `CMake Error: The source directory "/build/source" does not exist` / `make: *** [Makefile:383: cmake_check_build_system] Error 1` -- distinct from the compile-time discoverTree cmake-source-path bug (tinycbor/xxHash/re2): `phases.split`'s phase 2 forced `sourceRoot = "."`, so its `unpackPhase` never recreated the `/build/source` subdirectory cmake's own cached `CMAKE_HOME_DIRECTORY` (baked into `CMakeCache.txt` at phase 1 configure time) still pointed at -- the existing `dyndrvCdToBuildDir` reconstruction logic previously only triggered for meson's `build.ninja` marker, never for cmake+make; 0d233d3 generalizes it to cmake+make too. (Package itself still required a package-level workaround just to eval: nixpkgs' by-name `capnproto` takes a `clangStdenv` argument, not `stdenv`, since GCC ICEs on its C++20 coroutines -- worked around here by accelerating `clangStdenv` directly.) Details in `nix/packages/capnproto.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
@@ -67,7 +69,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Five bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Eight bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -95,7 +97,42 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
-5. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
+5. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
+   -- `cc`'s shim recognizes `conftest`-named/CMake-scratch/info-query
+   probes and runs them for real instead of deferring; `arShim`/
+   `ranlibShim` have no equivalent, so a package whose own configure
+   script probes `gcc-ar --version`/`gcc-ranlib --version` (a common
+   LTO-plugin-detection idiom) gets a deferred stub that misparses
+   `--version` as the archive argument, registering a nonsense
+   derivation that fails outright. PARTIALLY FIXED upstream by dyn-drvs
+   227b1a6 ("Fix ar/ranlib shims crashing/misclassifying on
+   version-probe invocations") -- retested here after bumping to
+   include it, and confirmed x264's own package-level `postPatch`
+   workaround is still required: 227b1a6's `isProbe` heuristic treats
+   any argv with a non-flag positional argument as "not a probe," but
+   x264's actual invocation is `gcc-ranlib --plugin
+   <path-to-liblto_plugin.so> --version` -- `--plugin`'s own value is a
+   non-flag positional argument, so `isProbe` still misclassifies it,
+   and the original failure (bogus `dyndrv-__version` stub, "No such
+   file") still reproduces byte-for-byte with the `postPatch` removed.
+6. **Single-output phase 1 loses real `outputLib`/etc. content on
+   restore** (x264) -- `phases.split` forcing phase 1 to `outputs =
+   ["out"]` makes nixpkgs' own `multiple-outputs.sh` fall back every
+   output variable (including `outputLib`) to `"out"` during the real
+   build, so content meant for a literal, non-fallback named output
+   (e.g. `--libdir=$lib/lib`) physically lands under phase 1's `$out`
+   instead. `dyndrvRestoreOutput`'s `_multioutDevs`/`_multioutDocs`
+   calls only know how to redistribute doc/dev-shaped content (headers,
+   pkgconfig, man/info/gtk-doc) into `$dev`/`$doc`/etc. -- neither
+   redistributes ordinary library content into `$lib`, so that output
+   is simply never created. A close cousin of bug already documented
+   in `~/dyn-drvs/docs/split-outputbin-override-bug.md` (a scalar
+   `outputBin` override reads a now-empty fallback variable and fails
+   outright), but distinct: here the build doesn't fail at setup, it
+   silently mis-routes real content and only fails much later, at
+   Nix's own "failed to produce output path" check once `installPhase`
+   already finished.
+7. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
    inputs as `inputs.drvs`** (openjpeg) -- unlike `ccToNode`'s
    `extraStorePaths`/`findAllStorePaths` scan (which greps every argv
    element for a literal store-path substring and folds it into the
@@ -108,7 +145,8 @@ patching dyn-drvs' source); documented in the relevant
    file or directory`, confirmed via `nix derivation show`). Distinct
    from bug #3 above (that fix only touched `cc`/`c++`'s own scan; `ar`/
    `ranlib` are a separate code path that was never given one at all).
-5. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
+   **FIXED in dyn-drvs 28af81d.**
+8. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
    absolute source directory** (capnproto) -- every real per-TU compile
    and link succeeded, but `installPhase` then failed outright
    (`CMake Error: The source directory "/build/source" does not exist`)
@@ -142,7 +180,12 @@ flake outputs; not package-fixable at this layer):
 - **tinycbor: same cmake-source-path bug against this repo's actual
   nixpkgs pin.** Wired into this flake as `dyndrv-tinycbor` (see table
   above) -- BLOCKED, not a pass, once checked against the pinned
-  nixpkgs's real (cmake-based, v7.0) recipe.
+  nixpkgs's real (cmake-based, v7.0) recipe. **libwebp** (~171 TUs,
+  single-output) independently confirmed the same bug a fourth time,
+  then went on to confirm two more distinct bugs (`ar`/`ranlib`
+  `inputs.drvs` gap, `-Wl,`-glued link.d path) before landing a full
+  **PASS** once all three fixes were in place (dyn-drvs 97a987d +
+  28af81d + dc07a0a) -- see table above.
 - **re2: FAIL, new bug.** 20 of ~51 compile-unit derivations fail with
   `cc1plus: fatal error: <src>.cc: No such file or directory` -- at the
   *compile* step, not link, and for real primary source files, not

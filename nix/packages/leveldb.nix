@@ -1,4 +1,4 @@
-# leveldb -- BLOCKED. cmake+make, ~39 real per-TU compile-unit derivations
+# leveldb -- PASS. cmake+make, ~39 real per-TU compile-unit derivations
 # registered (db/*.cc, table/*.cc, util/*.cc, plus leveldbutil's own TU),
 # LSM-tree engine, moderate-heavy per-file cost.
 #
@@ -17,24 +17,29 @@
 # `cmake_check_build_system`/`/build/source` install-time error,
 # separately fixed by dyn-drvs 0d233d3, also doesn't recur).
 #
-# NOW BLOCKED by a different, already-documented bug: leveldb's own
+# THEN blocked by a different, already-documented bug: leveldb's own
 # `postInstall` runs `substituteInPlace
-# "$out"/lib/cmake/leveldb/leveldbTargets.cmake ...`, and fails:
+# "$out"/lib/cmake/leveldb/leveldbTargets.cmake ...`, and failed:
 #
 #   substitute(): ERROR: file '.../leveldb-1.23/lib/cmake/leveldb/leveldbTargets.cmake' does not exist
 #
-# This is a second confirmation of
+# This was a second confirmation of
 # ~/dyn-drvs/docs/split-postinstall-before-restore-bug.md (previously
 # only confirmed via mosh's `wrapProgram $out/bin/mosh`): `postInstall`
 # fires as part of nixpkgs' `installPhase` itself, strictly before
 # `phases.split`'s synthesized `dyndrvRestoreOutput` phase (which copies
 # the placeholder-rooted tree into the real `$out`) ever runs -- so any
-# `postInstall` that reads/writes `$out` directly finds it still missing
-# whatever `make install` wrote under the placeholder root.
+# `postInstall` that reads/writes `$out` directly found it still missing
+# whatever `make install` wrote under the placeholder root. Confirmed
+# still open against dyn-drvs dc07a0a (unrelated to that fix's `-Wl,`-
+# unglue mechanism).
 #
-# No package-level workaround exists for either bug's remaining
-# blocker: the postInstall-ordering gap is a phases.split issue, not
-# something leveldb's own recipe controls.
+# FIXED upstream in dyn-drvs 1347c8c ("Fix phases.split:
+# dyndrvRestoreOutput ran too late for postInstall reading $out (task
+# #140)") -- confirmed directly, isolated to this rev alone: real
+# `libleveldb.so.1.23.0` verified as a genuine ELF binary, and the
+# previously-missing `leveldbTargets.cmake` now exists in the real
+# `-dev` output. `benchmarks/RESULTS.md` updated from BLOCKED to PASS.
 
 {
   pkgs,
