@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789348872786,
+  "lastUpdate": 1789349826315,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -173,6 +173,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 1.01,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "tbereknyei@anduril.com",
+            "name": "tbereknyei",
+            "username": "tomberek"
+          },
+          "distinct": true,
+          "id": "01fe3481ca9748f18cfedf3cc2a395d8e594835b",
+          "message": "Document libpng/libtasn1 (outputBin bug) and gperf (depfile bug) findings\n\nTwo more new dyn-drvs bugs found and independently verified during the\npackage survey, beyond the ones already covered (xxHash, re2, libb64,\nmpfr, tinycbor):\n\n- libpng/libtasn1 both fail at phase 1 setup with `_assignFirst: could\n  not find a non-empty variable ... outputMan`. Both set outputBin =\n  \"dev\" explicitly; phases.split forces single-output but doesn't clear\n  that inherited literal override.\n- gperf gets past real per-TU compiles, then fails at every automake\n  depcomp `mv .Tpo .Po` step -- the -MF depfile is a second compiler\n  output that never round-trips out of the per-TU sandbox.\n\nFull writeups went to ~/dyn-drvs/docs/ (left uncommitted there per\nstanding instruction).",
+          "timestamp": "2026-09-13T21:24:50-04:00",
+          "tree_id": "ab2fb0325fb800d2a9b20085394a43f8357b3e7e",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/01fe3481ca9748f18cfedf3cc2a395d8e594835b"
+        },
+        "date": 1789349825653,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.99,
             "unit": "x"
           }
         ]
