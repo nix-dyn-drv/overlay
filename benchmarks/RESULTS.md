@@ -45,6 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | `discoverTree` mode (used unconditionally by the `cc`/`c++` shim) runs `cc <args> -M -MG` to find extra paths to stage; on a link invocation `.o`/`-o <exe>` args make gcc treat it as unused linker input and print nothing, so `.o` inputs are never staged or resolved. Link derivations end up with empty `inputs.drvs` (confirmed via `nix derivation show`). Root-caused; two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | `dyndrv.phases.split`'s `sandboxedPhases` is a static list that omits `autoreconfHook`'s dynamically `appendToVar`'d `autoreconfPhase` (`configurePhase` logs "no configure script, doing nothing"). `mkAcceleratedStdenv` doesn't expose a `sandboxedPhases` override, so there's no package-level workaround; needs a dyn-drvs change. Details in `nix/packages/mosh.nix`. |
+| x264 | cold build | -- | pass (with 2 package-level workarounds) | -- | Autotools-style `./configure` + hand-written Makefile (NOT cmake -- explicitly ruled out ahead of time as a cmake candidate, tried anyway per instruction). Hit two NEW dyn-drvs bugs: (1) x264's own `configure` probes `gcc-ranlib --version`/`gcc-ar --version` for LTO-plugin detection, and the `ar`/`ranlib` shims (unlike `cc`'s) have no info-query passthrough, so the probe gets deferred and misparses `--version` as the archive-to-ranlib-in-place, registering a bogus `dyndrv-__version` stub that fails outright; (2) once patched around, real compiles and a real `cc`-driven `libx264.so.165` link both succeed (notably NOT hitting the open zstd/pcre2/mpfr discoverTree link-step bug), but `phases.split`'s single-output phase 1 makes nixpkgs' own `multiple-outputs.sh` fall back `outputLib -> out`, so x264's real `--libdir` content lands under phase 1's `$out/lib` and `dyndrvRestoreOutput`'s `_multioutDevs`/`_multioutDocs` calls never redistribute it into the real `$lib` output, so `$lib` is never created. Both worked around at the package level (postPatch to skip the probe, preFixup to move `$out/lib` into `$lib/lib`); real, runnable `bin/x264` confirmed (`x264 --version`). Details in `nix/packages/x264.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -92,6 +93,31 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
+5. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
+   -- `cc`'s shim recognizes `conftest`-named/CMake-scratch/info-query
+   probes and runs them for real instead of deferring; `arShim`/
+   `ranlibShim` have no equivalent, so a package whose own configure
+   script probes `gcc-ar --version`/`gcc-ranlib --version` (a common
+   LTO-plugin-detection idiom) gets a deferred stub that misparses
+   `--version` as the archive argument, registering a nonsense
+   derivation that fails outright.
+6. **Single-output phase 1 loses real `outputLib`/etc. content on
+   restore** (x264) -- `phases.split` forcing phase 1 to `outputs =
+   ["out"]` makes nixpkgs' own `multiple-outputs.sh` fall back every
+   output variable (including `outputLib`) to `"out"` during the real
+   build, so content meant for a literal, non-fallback named output
+   (e.g. `--libdir=$lib/lib`) physically lands under phase 1's `$out`
+   instead. `dyndrvRestoreOutput`'s `_multioutDevs`/`_multioutDocs`
+   calls only know how to redistribute doc/dev-shaped content (headers,
+   pkgconfig, man/info/gtk-doc) into `$dev`/`$doc`/etc. -- neither
+   redistributes ordinary library content into `$lib`, so that output
+   is simply never created. A close cousin of bug already documented
+   in `~/dyn-drvs/docs/split-outputbin-override-bug.md` (a scalar
+   `outputBin` override reads a now-empty fallback variable and fails
+   outright), but distinct: here the build doesn't fail at setup, it
+   silently mis-routes real content and only fails much later, at
+   Nix's own "failed to produce output path" check once `installPhase`
+   already finished.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README

@@ -30,14 +30,20 @@ acceleration only pays off when each unit costs more to compile than the
 nixpkgs packages found five more distinct dyn-drvs bugs beyond the four
 already documented — every failure traced back to either autotools'
 dependency-tracking idiom or cmake's generated build systems, while
-every clean pass used a plain, hand-written Makefile. Two more
-independent libraries, nix-ninja and drowse, each demonstrate a
-genuinely different angle on the same underlying feature: nix-ninja
-turns a meson-generated `build.ninja`'s real build graph into per-TU
-derivations (`nixninja-argp`, real `libargp.a` verified); drowse defers
-a whole package's *evaluation* into a nested `nix-instantiate` instead
-of splitting its *build* (`drowse-hello`, real runnable `hello` binary)
-— the "avoid IFD" half of the story, not fine-grained caching. See
+every clean pass used a plain, hand-written Makefile. x264 (autotools
+`configure` + hand-written Makefile) later became the first
+`configure`-based clean pass, but only after two more package-level
+workarounds for two more new dyn-drvs bugs (a diagnostic-probe
+passthrough gap in the `ar`/`ranlib` shims, and a multi-output restore
+gap losing real `$lib` content) — six distinct gaps found in total
+beyond the four already documented. Two more independent libraries,
+nix-ninja and drowse, each demonstrate a genuinely different angle on
+the same underlying feature: nix-ninja turns a meson-generated
+`build.ninja`'s real build graph into per-TU derivations
+(`nixninja-argp`, real `libargp.a` verified); drowse defers a whole
+package's *evaluation* into a nested `nix-instantiate` instead of
+splitting its *build* (`drowse-hello`, real runnable `hello` binary) —
+the "avoid IFD" half of the story, not fine-grained caching. See
 `benchmarks/RESULTS.md`.
 
 ## Quickstart
