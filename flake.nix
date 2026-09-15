@@ -171,6 +171,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-re2 = import ./nix/packages/re2.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-libssh = import ./nix/packages/libssh.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
