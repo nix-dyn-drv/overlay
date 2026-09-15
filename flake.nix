@@ -165,6 +165,24 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-libssh = import ./nix/packages/libssh.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-protobuf = import ./nix/packages/protobuf.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-x265 = import ./nix/packages/x265.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-leveldb = import ./nix/packages/leveldb.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
