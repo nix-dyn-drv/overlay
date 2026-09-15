@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789453447502,
+  "lastUpdate": 1789455145397,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -811,6 +811,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.62,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d374ff64535d82a47b718f825ae5bd431eff2102",
+          "message": "Merge pull request #6 from nix-dyn-drv/dav1d-package\n\nAdd dav1d (meson) -- PASS, fixed upstream by 227b1a6 + caa7c5d",
+          "timestamp": "2026-09-15T02:35:55-04:00",
+          "tree_id": "1d234f0a03a08cfdb9968d3013296421ff3a9f30",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/d374ff64535d82a47b718f825ae5bd431eff2102"
+        },
+        "date": 1789455143738,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.51,
             "unit": "x"
           }
         ]
