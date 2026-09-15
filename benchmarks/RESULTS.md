@@ -70,8 +70,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Seven bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
-Eight bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Nine bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -109,8 +108,7 @@ patching dyn-drvs' source); documented in the relevant
    any real TU compiles. First meson-based package tried here. **FIXED
    in dyn-drvs 227b1a6**; see the dav1d row above for the new bug found
    after this fix.
-6. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
-5. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
+6. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
    -- `cc`'s shim recognizes `conftest`-named/CMake-scratch/info-query
    probes and runs them for real instead of deferring; `arShim`/
    `ranlibShim` have no equivalent, so a package whose own configure
@@ -128,7 +126,7 @@ patching dyn-drvs' source); documented in the relevant
    non-flag positional argument, so `isProbe` still misclassifies it,
    and the original failure (bogus `dyndrv-__version` stub, "No such
    file") still reproduces byte-for-byte with the `postPatch` removed.
-6. **Single-output phase 1 loses real `outputLib`/etc. content on
+7. **Single-output phase 1 loses real `outputLib`/etc. content on
    restore** (x264) -- `phases.split` forcing phase 1 to `outputs =
    ["out"]` makes nixpkgs' own `multiple-outputs.sh` fall back every
    output variable (including `outputLib`) to `"out"` during the real
@@ -145,7 +143,7 @@ patching dyn-drvs' source); documented in the relevant
    silently mis-routes real content and only fails much later, at
    Nix's own "failed to produce output path" check once `installPhase`
    already finished.
-7. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
+8. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
    inputs as `inputs.drvs`** (openjpeg) -- unlike `ccToNode`'s
    `extraStorePaths`/`findAllStorePaths` scan (which greps every argv
    element for a literal store-path substring and folds it into the
@@ -159,8 +157,7 @@ patching dyn-drvs' source); documented in the relevant
    from bug #3 above (that fix only touched `cc`/`c++`'s own scan; `ar`/
    `ranlib` are a separate code path that was never given one at all).
    **FIXED in dyn-drvs 28af81d.**
-7. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
-8. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
+9. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
    absolute source directory** (capnproto) -- every real per-TU compile
    and link succeeded, but `installPhase` then failed outright
    (`CMake Error: The source directory "/build/source" does not exist`)
