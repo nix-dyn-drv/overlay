@@ -111,6 +111,16 @@
               batchGroups = [ { name = "lua"; patterns = [ "src/**/*.c" ]; } ];
             }).package;
 
+          # Contrast with dyn-drvs' permanent exec-bit limitation
+          # (discovertree-exec-bit-bug.md, hit on this exact package):
+          # nixgg's two-phase escape hatch (phase 2 = an ordinary,
+          # non-mkNixggBuild derivation) can self-exec a just-linked
+          # binary; dyn-drvs' single-buildPhase architecture never can.
+          # See nix/packages/libb64-nixgg.nix.
+          libb64-nixgg = import ./nix/packages/libb64-nixgg.nix {
+            inherit pkgs mkNixggBuild;
+          };
+
           zstd =
             let
               genHtml = mkNixggBuild {

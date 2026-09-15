@@ -29,6 +29,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | openssl | version bump (3.6.3->3.5.7) | 2153/2192 (98%) | -- | Version baked into `opensslv.h`, included nearly everywhere. |
 | openssl, hello, mosh, zstd | cold build | -- | -- | All four build cleanly end to end in CI (`.github/workflows/ci.yml`, real `/nix/store`, real per-TU `tu-*.o.drv` derivations submitted). |
 | lua (~30 TUs, one archive) | build phase, unbatched vs `batchGroups` | 34 -> 2 derivations | 3.91s vs 2.29s | **1.71x**. `batchGroups` collapses 24 per-TU compiles + 1 `ar` step into a single `batch-liblua.a.drv`. Timed as build-phase-only (excludes one-time toolchain substitution, which is identical for both variants and swamps the signal if included -- a whole-`nix build` timing found only 1.02-1.07x). See `benchmarks/nixgg-batch-rebuild.sh`. |
+| libb64 (self-exec mid-build) | two-phase split vs dyn-drvs' single-buildPhase limit | -- | -- | **PASS**, contrasting with dyn-drvs' permanent limitation on the SAME package (`discovertree-exec-bit-bug.md`). A one-phase `mkNixggBuild` hits the identical wall dyn-drvs does (`Permission denied` execing a just-linked, still-deferred binary) -- nixgg's own DESIGN.md names this "the synchronous-realize wall," inherent to `builder-rpc-v0` having no synchronous build op. But nixgg's two-phase pattern (phase 2 = an ORDINARY `stdenv.mkDerivation`, not another `mkNixggBuild`, with `buildInputs` forcing phase 1 to resolve to real bytes first) sidesteps it entirely: phase 1 accelerates libb64's 2 real per-TU compiles into their own dynamic derivations; phase 2 links `c-example1` against the real, resolved `libb64.a` and runs it directly. Confirmed via the build log's own real output (`encoded: aGVsbG8gd29ybGQ=` / `decoded: hello world`, not a stub). Real caveat: this only works because libb64's self-exec has a clean phase boundary reachable via `buildInputs` -- nixgg's own DESIGN.md is explicit that a build whose synchronous read-back is interleaved with acceleration-needing work on BOTH sides of that boundary remains unsolved even for nixgg. See `nix/packages/libb64-nixgg.nix`. |
 
 ## dyn-drvs mechanism (`accelerate.mkAcceleratedStdenv`)
 
@@ -68,7 +69,7 @@ this flake, for breadth of evidence:
 | Package | Result |
 |---|---|
 | xxHash | FAIL -- cmake-source-path bug (same as tinycbor/zstd above). |
-| libb64 | FAIL -- exec-bit limitation (same class as protobuf), on a plain Makefile self-test. |
+| libb64 | FAIL -- exec-bit limitation (same class as protobuf), on a plain Makefile self-test. **Contrast**: nixgg's two-phase split PASSES on this exact package -- see the nixgg-mechanism table above (`libb64-nixgg`). |
 | mpfr | FAIL -- confirms the discoverTree link-step gap (bug #3, same shape as pcre2). |
 
 Every package tried outside the four hand-written-Makefile passes
