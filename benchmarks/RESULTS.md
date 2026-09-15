@@ -31,6 +31,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | openssl (~2200 TUs) | one-file patch (`crypto/mem.c`) | 2/2213 | -- | From nixgg's README; not re-measured here. |
 | openssl | version bump (3.6.3->3.5.7) | 2153/2192 (98%) | -- | Version baked into `opensslv.h`, included nearly everywhere. |
 | openssl, hello, mosh, zstd | cold build | -- | -- | All four build cleanly end to end in CI (`.github/workflows/ci.yml`, real `/nix/store`, real per-TU `tu-*.o.drv` derivations submitted). |
+| lua (~30 TUs, one archive) | build phase, unbatched vs `batchGroups` | 34 -> 2 derivations | 3.91s vs 2.29s | **1.71x**. `batchGroups` collapses 24 per-TU compiles + 1 `ar` step into a single `batch-liblua.a.drv`. Timed as build-phase-only (excludes one-time toolchain substitution, which is identical for both variants and swamps the signal if included -- a whole-`nix build` timing found only 1.02-1.07x). See `benchmarks/nixgg-batch-rebuild.sh`. |
 
 ## dyn-drvs mechanism (`accelerate.mkAcceleratedStdenv`)
 

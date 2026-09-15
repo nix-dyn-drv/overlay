@@ -26,6 +26,14 @@
     };
     nixNinja.url = "github:pdtpartners/nix-ninja";
     drowse.url = "github:figsoda/drowse";
+    # Same pin nixgg's own flake.nix uses for its lua/lua-batch examples --
+    # a small (~30 TU), plain-Makefile, single-archive fixture, ideal for
+    # directly testing whether nixgg's batchGroups closes the per-TU
+    # registration-overhead loss this repo already measured on freetype.
+    lua-src = {
+      url = "https://www.lua.org/ftp/lua-5.4.7.tar.gz";
+      flake = false;
+    };
   };
 
   outputs =
@@ -37,13 +45,13 @@
       forEachSystem = f: builtins.mapAttrs (system: pkgs: f system pkgs) inputs.nixpkgs.legacyPackages;
     in
     {
-      # nixgg mechanism (splitStdenv/dynDrvStdenv). zstd needs the
-      # gen_html fix below; the rest just override stdenv.
+      # nixgg mechanism (splitStdenv). zstd needs the gen_html fix below;
+      # the rest just override stdenv.
       packages = forEachSystem (
         system: pkgs:
         let
           nixggPackages = inputs.nixgg.packages.${system};
-          dynDrvStdenv = nixggPackages.dynDrvStdenv { stdenv = pkgs.stdenv; };
+          dynDrvStdenv = nixggPackages.splitStdenv { stdenv = pkgs.stdenv; splitAtBuild = true; };
           inherit (nixggPackages) mkNixggBuild;
 
           dyndrvLib = inputs.dyndrv.lib.${system};
@@ -60,13 +68,56 @@
           openssl-3_5 = pkgs.openssl_3_5.override { stdenv = dynDrvStdenv; };
           hello = pkgs.hello.override { stdenv = dynDrvStdenv; };
           mosh = pkgs.mosh.override { stdenv = dynDrvStdenv; };
+
+          # nixgg's own batching win, tried directly against the same
+          # shape of loss this repo already measured on freetype (small,
+          # fast-compiling TUs -- freetype's ~45 real TUs lost 6.7x to
+          # ~80ms/derivation registration overhead under dyn-drvs'
+          # per-TU acceleration; see benchmarks/RESULTS.md's break-even
+          # lesson). lua is nixgg's own proof point for exactly this:
+          # ~30 TUs, one archive (liblua.a), plain Makefile -- unbatched
+          # registers 30 separate per-TU derivations plus the archive
+          # step; `nixgg-lua-batch` collapses the whole archive into one
+          # batch derivation instead (go/internal/shim/batcharchive.go's
+          # tryBatchArchive), matching nixgg's own lua/lua-batch flake
+          # outputs verbatim.
+          nixgg-lua =
+            (mkNixggBuild {
+              pname = "lua";
+              version = "5.4.7";
+              src = inputs.lua-src;
+              targets = [
+                { name = "lua"; path = "lua"; }
+                { name = "luac"; path = "luac"; }
+              ];
+              buildCommand = ''
+                cd src
+                make linux CC=cc
+              '';
+            }).package;
+          nixgg-lua-batch =
+            (mkNixggBuild {
+              pname = "lua";
+              version = "5.4.7";
+              src = inputs.lua-src;
+              targets = [
+                { name = "lua"; path = "lua"; }
+                { name = "luac"; path = "luac"; }
+              ];
+              buildCommand = ''
+                cd src
+                make linux CC=cc
+              '';
+              batchGroups = [ { name = "lua"; patterns = [ "src/**/*.c" ]; } ];
+            }).package;
+
           zstd =
             let
               genHtml = mkNixggBuild {
                 pname = "zstd-gen-html";
                 version = "0";
                 src = pkgs.zstd.src;
-                target = "gen_html";
+                targets = [ { name = "gen_html"; path = "gen_html"; } ];
                 buildCommand = ''
                   cd contrib/gen_html
                   g++ -O2 -c gen_html.cpp -o gen_html.o
@@ -75,10 +126,14 @@
               };
             in
             pkgs.zstd.override {
-              # extraPhase1Attrs goes on dynDrvStdenv, not zstd.override.
-              stdenv = nixggPackages.dynDrvStdenv {
+              # extraBuildAttrs goes on splitStdenv, not zstd.override --
+              # this is the pre-build (configure+build combined, since
+              # splitAtConfigure isn't set) stage's own escape hatch,
+              # renamed from the old dynDrvStdenv's extraPhase1Attrs.
+              stdenv = nixggPackages.splitStdenv {
                 stdenv = pkgs.stdenv;
-                extraPhase1Attrs =
+                splitAtBuild = true;
+                extraBuildAttrs =
                   finalAttrs: old:
                   old
                   // {
