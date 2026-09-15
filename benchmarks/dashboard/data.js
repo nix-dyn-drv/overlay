@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789451287482,
+  "lastUpdate": 1789453447502,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -782,6 +782,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.61,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1ea9439b5f0be2588eaac99b915362c86d8216cc",
+          "message": "Merge pull request #9 from nix-dyn-drv/brotli-package\n\nAdd brotli (CMake, ~38 TUs, 3-output) -- PASS: __structuredAttrs bug fixed upstream",
+          "timestamp": "2026-09-15T02:05:11-04:00",
+          "tree_id": "45febd4657b1719800e701b5089def08352eba77",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/1ea9439b5f0be2588eaac99b915362c86d8216cc"
+        },
+        "date": 1789453446553,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.62,
             "unit": "x"
           }
         ]
