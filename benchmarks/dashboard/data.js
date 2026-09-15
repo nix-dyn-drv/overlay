@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789512896500,
+  "lastUpdate": 1789512908266,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -985,6 +985,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.63,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9fb5851aabdeca78a384dafb493856029b8465fe",
+          "message": "Merge pull request #22 from nix-dyn-drv/libb64-nixgg-twophase\n\nAdd libb64-nixgg: nixgg's two-phase escape hatch for self-exec-mid-build",
+          "timestamp": "2026-09-15T18:37:22-04:00",
+          "tree_id": "c72914a5d8dbe27eadaf4239b79b455a46009400",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/9fb5851aabdeca78a384dafb493856029b8465fe"
+        },
+        "date": 1789512907511,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.58,
             "unit": "x"
           }
         ]
