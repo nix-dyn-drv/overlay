@@ -205,8 +205,19 @@ jobs:
       # dynamic-derivations mechanism itself, just a UX add-on over the
       # Cachix push above. Same same-repo gate as the push itself, since
       # a fork PR never pushed anything for trynix to find in the cache.
+      #
+      # continue-on-error: this step has intermittently failed trying to
+      # resolve .#openssl's dynamic-derivation placeholder from the
+      # cache, even after the "Push to Cachix" step above (which runs
+      # first in job order) has already pushed it -- root cause not
+      # nailed down (tried `build: true`, which made it worse: the
+      # ambient daemon lacks builder-rpc-v0 entirely, so trynix's own
+      # `nix build` attempt fails outright rather than just warning).
+      # Non-blocking for now, matching the nix-ninja step's same
+      # informational-until-root-caused treatment above.
       - name: Post trynix boot link (PR comments only)
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
         uses: fzakaria/trynix@v1
         with:
           cache: https://dynamicderivations.cachix.org
