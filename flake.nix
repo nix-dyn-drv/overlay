@@ -159,6 +159,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-dav1d = import ./nix/packages/dav1d.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-brotli = import ./nix/packages/brotli.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;

@@ -45,6 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
+| dav1d | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 227b1a6 + caa7c5d) | -- | First meson-based package tried against `accelerate.mkAcceleratedStdenv`. Originally failed during `configurePhase`, before any real TU compiles: `meson.build:25:0: ERROR: Unknown linker(s): [['ar']]` -- meson's own linker-detection probe runs `ar --version`, and `arToNode`'s shim had no probe/passthrough case at all, so a 1-arg probe made `len - 2 = -1` and `builtins.genList` threw `cannot create list of size -1`. FIXED upstream in dyn-drvs 227b1a6 ("Fix ar/ranlib shims crashing/misclassifying on version-probe invocations") -- confirmed directly: `configurePhase` now succeeds and the real ninja build starts, with dozens of real TUs (cdef_tmpl, ipred_tmpl, mc_tmpl, msac, obu, picture, etc.) actually compiling. Then blocked by a different bug: a real (non-probe) compile failed with `gcc: error: unrecognized command-line option '-Wshorten-64-to-32'` -- dav1d's `meson.build` probes for this Clang-only flag via `cc.get_supported_arguments([...])` (meson's own `testfile.<suffix>` probe naming convention, meson's exact analog to autoconf's `conftest`), which wasn't caught by `isConftest`/`isCMakeProbe`/`isInfoQuery`/`isCompileToExecutableProbe` (it has a `-c` flag and a real positional source), so the probe got deferred and a deferred stub always reports success -- meson concluded GCC supports the flag, baked it into every real TU's compile flags, and every real compile then failed on the unrecognized option. Confirmed still open against every later dyn-drvs commit through this retest (dc07a0a, 1347c8c, e5f9a61, 5468402, 2cb6b4d) -- identical `-Wshorten-64-to-32` failure. No package-level workaround existed: unlike libssh/protobuf/x265's cmake-option workarounds, dav1d's `meson.build` bakes this flag-probe list in unconditionally, with no `-D` option gating it. **FIXED upstream in dyn-drvs caa7c5d** ("Fix meson compiler-check probes not recognized as passthrough-eligible (task #146)") -- adds `isMesonProbe`, checking source/positional-arg basenames for the `testfile.` prefix, mirroring `isConftest`'s convention. Confirmed directly: `dyndrv-dav1d` now builds clean end to end -- every real TU compiles and links for real, producing a genuine `libdav1d.so.7.0.0` (verified ELF shared object). Details in `nix/packages/dav1d.nix`. |
 | brotli (~38 TUs, cmake, 3-output) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 0d233d3 + 2cb6b4d) | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`) is fixed upstream (dyn-drvs 97a987d) -- confirmed all three per-TU shared-lib derivations (libbrotlicommon/libbrotlienc/libbrotlidec) now build and link cleanly. Then blocked by a real-content restore-path bug at `fixupPhase`: `find: '/nix/store/...-brotli-1.2.0-dev': No such file or directory` -- `$dev` (and `$lib`) were never created at all. Root-caused more precisely than previously documented: brotli's real recipe sets `__structuredAttrs = true;`, which Nix's own builder (via `NIX_ATTRS_SH_FILE`, sourced before `stdenv/setup` even runs) uses to generate the sandboxed shell's env vars FROM the derivation's real, computed CA output path -- completely ignoring `phases.split`'s own `out = dyndrvPlaceholderOut` attribute override on phase 1. Every `-- Installing: ...` log line showed the REAL computed store path directly, meaning nothing ever went through the placeholder-then-restore mechanism at all; the "flat top-level layout" previously blamed on a `dyndrvRestoreOutput` tree-flattening bug was actually just the placeholder-copy step finding nothing to copy. **FIXED upstream in dyn-drvs 2cb6b4d** ("Fix phases.split: force __structuredAttrs = false on sandboxedDrv (task #143)") -- forces this off on phase 1's own synthetic derivation regardless of the caller's own setting. Confirmed directly: `dyndrv-brotli` now builds clean end to end -- real `libbrotlicommon.so.1.2.0`/`libbrotlienc.so.1.2.0`/`libbrotlidec.so.1.2.0` (verified genuine ELF shared objects) correctly land under `$lib/lib/`, headers under `$dev/include/`, `bin/brotli` under `$out/bin/`, no package-level workaround needed. Details in `nix/packages/brotli.nix`. |
 | libssh (~110+ TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + e5f9a61 + bb1c077, 1 package-level workaround) | -- | Original cmake-source-path bug (every real TU compile failing with `cc1: fatal error: /build/libssh-0.12.2/src/agent.c: No such file or directory`, a fifth confirmed instance) is fixed upstream (dyn-drvs 97a987d) -- confirmed all ~70 per-TU compiles now succeed. Then blocked by a linker-script staging bug at the final `.so` link step: `ld.bfd: cannot open linker script file /build/libssh-0.12.2/src/libssh.map: No such file or directory` -- the link step invokes `-Wl,--version-script,/build/libssh-0.12.2/src/libssh.map`, an absolute-path auxiliary file `discoverTree` never stages (same root bug class as its cmake-source-path bug, but on a linker version-script rather than a compile TU source). Confirmed unaffected by dyn-drvs 0d233d3/dc07a0a/1347c8c/5468402 (none touch this code path). **Worked around at the package level**: `-DWITH_SYMBOL_VERSIONING=OFF` (a real, upstream libssh cmake flag) disables the whole version-script code path outright, avoiding the bug entirely rather than fixing it -- confirmed real per-TU compiles, `ar`, and the `.so` link all succeed with this flag, producing a genuine `libssh.so.4.12.0`. That workaround exposed a SECOND bug (since fixed): `postFixup`'s `substituteInPlace $dev/lib/cmake/libssh/libssh-config.cmake ...` failed (`file ... does not exist`) -- unlike leveldb's `postInstall`-before-restore bug (fixed by dyn-drvs 1347c8c, confirmed NOT the same issue here), libssh's `$dev` output wasn't populated with `lib/cmake/libssh` content at all until retested against dyn-drvs e5f9a61 (task #139's `dyndrvMoveFromOut` fix, which also covers `lib/cmake` as part of its general `lib` redistribution) -- confirmed the file now exists. That exposed a THIRD, distinct bug (also since fixed): `substituteInPlace` still failed, now with `pattern set(_IMPORT_PREFIX "...") doesn't match anything` -- cmake's own `install(EXPORT ...)` bakes phase 1's LITERAL placeholder path (`/build/dyndrv-placeholder-out`) into the generated file's `_IMPORT_PREFIX`, and `dyndrvCopyPlaceholderScript` copied the file's content byte-for-byte without ever rewriting this embedded string. **FIXED upstream in dyn-drvs bb1c077** ("Fix phases.split: rewrite placeholder path baked into copied file content (task #145)") -- confirmed directly: `dyndrv-libssh` now builds clean end to end, real `libssh.so.4.12.0` verified as a genuine ELF shared object, and `libssh-config.cmake`'s `_IMPORT_PREFIX` correctly reads the real `$dev` path. Details in `nix/packages/libssh.nix`. |
 | protobuf | cold build | all TUs compiled+linked | **PASS** (with 2 package-level workarounds) | -- | cmake, ~221 TUs, real cross-package deps (gtest/zlib/abseil-cpp). Originally BLOCKED: protobuf's own build re-executes its freshly-linked `protoc` binary directly (`./protoc`) as a code generator for every `.proto` file in its OWN test suite; every invocation failed with `bash: ./protoc: Permission denied` / `Error 126`, cascading into a full `make` failure. Same root cause as the already-documented discoverTree exec-bit bug (libb64), later root-caused by dyn-drvs 5468402 as a permanent architectural limitation, not a fixable bug. **Worked around**: `-Dprotobuf_BUILD_TESTS:BOOL=FALSE` (a real, upstream cmake option) skips the whole `cmake/tests.cmake`/`upb-test` code path that self-execs `protoc`, entirely avoiding the bug -- loses nothing this survey was already exercising (`doCheck` already disabled). With that fixed, hit libssh's exact linker-script staging bug next (`ld.bfd: cannot open linker script file .../libprotobuf.map`). **Also worked around**: `-Dprotobuf_HAVE_LD_VERSION_SCRIPT:BOOL=FALSE` pre-seeds the CMake cache variable protobuf's own `check_linker_flag` probe would otherwise set, skipping the probe and the `-Wl,--version-script=...` link flag entirely. Confirmed with BOTH workarounds together: `dyndrv-protobuf` builds clean end to end -- real `libprotobuf.so.36.1.0`/`libprotoc.so.36.1.0`/`protoc` all verified as genuine ELF binaries. Details in `nix/packages/protobuf.nix`. |
@@ -73,7 +74,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Eleven bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Fourteen bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -101,7 +102,17 @@ patching dyn-drvs' source); documented in the relevant
    `finalAttrs: {...}` call convention but doesn't provide the
    `finalPackage` attribute nixpkgs' `makeOverridable` injects, which
    real packages (openssl, likely others) read.
-5. **A freshly-linked executable loses its execute bit under
+5. **`ar` shim has no probe/passthrough case at all** (dav1d) --
+   `arToNode` unconditionally treats argv[0]/argv[1] as
+   modifiers/archive-path with no exception, unlike `cc`'s own
+   `isConftest`/`isCMakeProbe`/`isInfoQuery` passthrough logic. meson's
+   own unconditional `ar --version` linker-detection probe (a 1-arg
+   invocation) makes its `len - 2` input count negative, crashing
+   `builtins.genList` outright (`cannot create list of size -1`) before
+   any real TU compiles. First meson-based package tried here. **FIXED
+   in dyn-drvs 227b1a6**; see the dav1d row above for the new bug found
+   after this fix.
+6. **A freshly-linked executable loses its execute bit under
    `discoverTree`** (protobuf) -- first found on libb64's small
    Makefile self-test (wider survey below), now confirmed on a wired-in
    flake output at real scale: protobuf's own build re-executes its
@@ -124,7 +135,7 @@ patching dyn-drvs' source); documented in the relevant
    upstream cmake option, not a dyn-drvs fix) -- confirmed protobuf now
    builds clean end to end. Not every affected package will have an
    equivalent flag.
-6. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
+7. **`ar`/`ranlib` shims have no diagnostic-probe passthrough** (x264)
    -- `cc`'s shim recognizes `conftest`-named/CMake-scratch/info-query
    probes and runs them for real instead of deferring; `arShim`/
    `ranlibShim` have no equivalent, so a package whose own configure
@@ -142,7 +153,7 @@ patching dyn-drvs' source); documented in the relevant
    non-flag positional argument, so `isProbe` still misclassifies it,
    and the original failure (bogus `dyndrv-__version` stub, "No such
    file") still reproduces byte-for-byte with the `postPatch` removed.
-7. **Single-output phase 1 loses real `outputLib`/etc. content on
+8. **Single-output phase 1 loses real `outputLib`/etc. content on
    restore** (x264) -- `phases.split` forcing phase 1 to `outputs =
    ["out"]` makes nixpkgs' own `multiple-outputs.sh` fall back every
    output variable (including `outputLib`) to `"out"` during the real
@@ -159,7 +170,7 @@ patching dyn-drvs' source); documented in the relevant
    silently mis-routes real content and only fails much later, at
    Nix's own "failed to produce output path" check once `installPhase`
    already finished.
-8. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
+9. **`arToNode`/`ranlibToNode` never declare their own `.o`/archive
    inputs as `inputs.drvs`** (openjpeg) -- unlike `ccToNode`'s
    `extraStorePaths`/`findAllStorePaths` scan (which greps every argv
    element for a literal store-path substring and folds it into the
@@ -173,7 +184,7 @@ patching dyn-drvs' source); documented in the relevant
    from bug #3 above (that fix only touched `cc`/`c++`'s own scan; `ar`/
    `ranlib` are a separate code path that was never given one at all).
    **FIXED in dyn-drvs 28af81d.**
-9. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
+10. **`phases.split`'s phase 2 never reconstructed a cmake+make build's
    absolute source directory** (capnproto) -- every real per-TU compile
    and link succeeded, but `installPhase` then failed outright
    (`CMake Error: The source directory "/build/source" does not exist`)
@@ -187,7 +198,26 @@ patching dyn-drvs' source); documented in the relevant
    already succeeded for real. **FIXED in dyn-drvs 0d233d3** ("Fix
    phases.split cmake+make out-of-tree install failure (task #138)");
    capnproto now builds clean end to end.
-9. **`__structuredAttrs = true` silently defeats `sandboxedDrv`'s own
+11. **meson's own compiler-check probes aren't passthrough-eligible**
+   (dav1d) -- meson's `cc.get_supported_arguments`/`has_function`/
+   `has_header`/`compiles`/`links` all funnel through the same
+   `Compiler.compile()` primitive, which unconditionally names its
+   scratch source file `testfile.<suffix>` (confirmed directly from
+   meson's own source, `mesonbuild/compilers/compilers.py`) -- meson's
+   exact analog to autoconf's `conftest` convention (bug #1 above's
+   CMake equivalent). Neither `isConftest` nor `isCMakeProbe` recognized
+   this naming, and the invocation has a real `-c` flag and real
+   positional source, so it didn't match `isCompileToExecutableProbe`/
+   `isInfoQuery` either -- the probe got deferred into a batched node
+   that always reports success, meson concluded an unsupported flag WAS
+   supported, baked it into every real TU's compile flags, and every
+   real compile then failed on the unrecognized option
+   (`-Wshorten-64-to-32`, Clang-only). **FIXED in dyn-drvs caa7c5d**
+   ("Fix meson compiler-check probes not recognized as
+   passthrough-eligible (task #146)") -- adds `isMesonProbe`, checking
+   source/positional-arg basenames for the `testfile.` prefix; dav1d now
+   builds clean end to end.
+12. **`__structuredAttrs = true` silently defeats `sandboxedDrv`'s own
    `out = dyndrvPlaceholderOut` override** (brotli) -- under
    `structuredAttrs`, Nix's own builder generates the sandboxed shell's
    env vars FROM the derivation's real, computed CA output path (via
@@ -207,7 +237,7 @@ patching dyn-drvs' source); documented in the relevant
    false on sandboxedDrv (task #143)") -- forces this off on phase 1's
    own synthetic derivation regardless of the caller's own setting;
    brotli now builds clean end to end.
-10. **A linker version-script (`-Wl,--version-script,<absolute-path>`)
+13. **A linker version-script (`-Wl,--version-script,<absolute-path>`)
    is never staged into the per-derivation build tree** (libssh) --
    same root bug class as `discoverTree`'s cmake-source-path bug
    (failing to resolve/stage a file referenced by an absolute in-sandbox
@@ -230,7 +260,7 @@ patching dyn-drvs' source); documented in the relevant
    placeholder copy. Confirmed directly: `dyndrv-libssh` now builds
    clean end to end (with the version-script workaround still required),
    real `libssh.so.4.12.0` verified as a genuine ELF shared object.
-11. **Bare `-l<name>` link args are never resolved to their producing
+14. **Bare `-l<name>` link args are never resolved to their producing
    derivation** (x265) -- every previous link-step gap this survey found
    (bug #3 above, 28af81d's `ar`-input scan) works by scanning argv/env
    for a literal, already-resolved `/nix/store/...` substring. x265's
