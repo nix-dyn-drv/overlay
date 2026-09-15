@@ -286,6 +286,18 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-libpng = import ./nix/packages/libpng.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-libtasn1 = import ./nix/packages/libtasn1.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           # nix-ninja mechanism: a drop-in `ninja` replacement translating a
           # meson-generated build.ninja's real build graph into dynamic
           # derivations. Third, independent implementation of the same

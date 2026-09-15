@@ -48,15 +48,17 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | openjpeg | **PASS** (fixed 28af81d) | `ar`/`ranlib` never declared their own `.o` inputs as `inputs.drvs`. |
 | capnproto | **PASS** (fixed 0d233d3) | Install-time cmake+make out-of-tree failure; also required `clangStdenv` (GCC ICEs on this package's C++20). |
 | gperf (~20 TUs, autotools) | **PASS** (fixed 9dc8037) | Automake's `-MF .deps/$*.Tpo` depfile side-output never round-tripped out of the per-TU sandbox, so the following `mv` always failed. Fixed upstream by touching an empty depfile at defer time (content is irrelevant -- Nix always rebuilds from scratch). |
+| libpng, libtasn1 | **BLOCKED** (1 bug fixed, 1 new bug found) | Both set `outputBin = "dev"` explicitly; `phases.split`'s forced single-output setup didn't clear that, crashing before any compile ran -- fixed upstream (0a8b174). With that fixed, every real compile succeeds, but the next link step (referencing libtool's plain, unversioned `.so` symlink rather than the real versioned `.so.N.N.N` file that's actually tracked) fails: `ld.bfd: cannot find ./.libs/libpng16.so`. New, still-open bug -- see `docs/libtool-so-symlink-bug.md` in dyn-drvs. |
 | tinycbor, zstd | **BLOCKED** | This flake's pinned nixpkgs builds both via cmake, hitting the still-open cmake-source-path bug (`cc1: fatal error: /build/source/<file>: No such file or directory`). |
 | mosh | **BLOCKED** | `autoreconfHook` phase-injection bug fixed (8aa6b86), but `postInstall`'s `wrapProgram` now runs before `phases.split` restores `$out` -- new, still-open bug. |
 | openssl | **NO-GO at eval time** | `mkAcceleratedStdenv` doesn't provide `finalAttrs.finalPackage`, which openssl's recipe reads. Never reached the interesting `-DOPENSSLDIR=` risk. |
 
-15 distinct bugs found beyond dyn-drvs' own freetype proof point; 12 fixed
-upstream during this survey, 3 remain open (mosh's restore-ordering bug,
+16 distinct bugs found beyond dyn-drvs' own freetype proof point; 12 fixed
+upstream during this survey, 4 remain open (mosh's restore-ordering bug,
 the cmake-source-path bug on tinycbor/zstd/xxHash, x265's bare
-`-l<name>` link arg). Full repro/root-cause/fix detail for each is in the
-relevant `nix/packages/*.nix` header -- not duplicated here.
+`-l<name>` link arg, libpng/libtasn1's libtool `.so`-symlink gap). Full
+repro/root-cause/fix detail for each is in the relevant
+`nix/packages/*.nix` header -- not duplicated here.
 
 ## Wider package survey (not wired into flake outputs)
 
