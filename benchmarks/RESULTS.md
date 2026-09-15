@@ -45,7 +45,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | tinycbor | cold build | **BLOCKED** | -- | -- | This flake's pinned nixpkgs (26.05) ships tinycbor 7.0, a cmake build: every real TU compile fails with `cc1: fatal error: /build/source/src/*.c: No such file or directory` -- the same discoverTree cmake-source-path bug as xxHash/re2 below. (An older, qmake-based tinycbor 0.6.1 from a different nixpkgs channel built cleanly during initial spot-checking, including cc-driven `.so`/executable links -- but that's not what this repo's pin actually resolves to.) See `nix/packages/tinycbor.nix`. |
 | zstd | cold build | **BLOCKED** | -- | -- | Original link-step bug (empty `inputs.drvs` on a `cc`-driven link) is fixed upstream (dyn-drvs 26cf7b9). Still hits the cmake-source-path bug: every real per-TU compile fails with `cc1: fatal error: /build/source/<file>: No such file or directory` -- same bug as xxHash/re2/tinycbor below, still open. Two other bugs also fixed here (gen_html self-exec, a CMake compiler-flag-probe false positive). Details in `nix/packages/zstd.nix`. |
 | mosh | cold build | **BLOCKED** | -- | -- | Original autoreconfHook phase-dropping bug is fixed upstream (dyn-drvs 8aa6b86) -- `configurePhase`/`buildPhase` now run for real, `mosh-client`/`mosh-server` link and install correctly. Now blocked by a different, new bug: `postInstall` (`wrapProgram $out/bin/mosh`) runs as part of nixpkgs' `installPhase` itself, but `phases.split`'s `dyndrvRestoreOutput` phase (copies the placeholder-rooted tree into the real `$out`) is inserted AFTER `installPhase`, so `wrapProgram` looks for `$out/bin/mosh` before the restore ever runs. Details in `nix/packages/mosh.nix`. |
-| brotli (~38 TUs, cmake, 3-output) | cold build | **BLOCKED** | -- | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`) is fixed upstream (dyn-drvs 97a987d) -- confirmed all three per-TU shared-lib derivations (libbrotlicommon/libbrotlienc/libbrotlidec) now build and link cleanly. Now blocked by a real-content restore-path bug at `fixupPhase`: `find: '/nix/store/...-brotli-1.2.0-dev': No such file or directory` -- `$dev` (and `$lib`) are never created at all. Confirmed still open against dyn-drvs 5468402 (the latest pushed commit as of this retest). Root-caused more precisely than previously documented: brotli's own `make install` genuinely runs and reports installing real files (`-- Installing: .../lib/libbrotlienc.so...`), but inspecting `$out`'s real content shows every installed file landed flat at `$out`'s top level (`$out/libbrotlicommon.pc`, `$out/libbrotlienc.so...`) instead of under `$out/lib/`, `$out/include/`, etc -- `CMakeCache.txt`'s own `CMAKE_INSTALL_LIBDIR`/`CMAKE_INSTALL_PREFIX` entries point at a DIFFERENT derivation output path (`/nix/store/<hash>-brotli-1.2.0.drv/lib`, the phase-1 baked-in placeholder) than the real, final `$out` this build actually resolved to, and `dyndrvRestoreOutput`'s generic tree-hoist logic flattens that mismatched nested structure into `$out`'s root rather than preserving `lib/`/`include/` subdirectories. Since the content never lands under a `lib/cmake`-or-similar path `_multioutDevs`/`dyndrvMoveFromOut` scan for, neither redistributes anything into `$dev`/`$lib`, so both stay empty. Distinct from (and deeper than) the previously-documented "single-output phase 1 loses outputLib content" framing -- the content isn't just mis-routed to the wrong OUTPUT, its directory STRUCTURE is flattened during restore. Same general shape independently confirmed on libssh (`$dev`/`lib/cmake` also never populated, still unresolved there too). No package-level workaround found (`staticOnly` and other brotli cmake options don't change the output declaration or avoid this restore path). Details in `nix/packages/brotli.nix`. |
+| brotli (~38 TUs, cmake, 3-output) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 0d233d3 + 2cb6b4d) | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1: fatal error: /build/source/c/common/dictionary.c: No such file or directory`) is fixed upstream (dyn-drvs 97a987d) -- confirmed all three per-TU shared-lib derivations (libbrotlicommon/libbrotlienc/libbrotlidec) now build and link cleanly. Then blocked by a real-content restore-path bug at `fixupPhase`: `find: '/nix/store/...-brotli-1.2.0-dev': No such file or directory` -- `$dev` (and `$lib`) were never created at all. Root-caused more precisely than previously documented: brotli's real recipe sets `__structuredAttrs = true;`, which Nix's own builder (via `NIX_ATTRS_SH_FILE`, sourced before `stdenv/setup` even runs) uses to generate the sandboxed shell's env vars FROM the derivation's real, computed CA output path -- completely ignoring `phases.split`'s own `out = dyndrvPlaceholderOut` attribute override on phase 1. Every `-- Installing: ...` log line showed the REAL computed store path directly, meaning nothing ever went through the placeholder-then-restore mechanism at all; the "flat top-level layout" previously blamed on a `dyndrvRestoreOutput` tree-flattening bug was actually just the placeholder-copy step finding nothing to copy. **FIXED upstream in dyn-drvs 2cb6b4d** ("Fix phases.split: force __structuredAttrs = false on sandboxedDrv (task #143)") -- forces this off on phase 1's own synthetic derivation regardless of the caller's own setting. Confirmed directly: `dyndrv-brotli` now builds clean end to end -- real `libbrotlicommon.so.1.2.0`/`libbrotlienc.so.1.2.0`/`libbrotlidec.so.1.2.0` (verified genuine ELF shared objects) correctly land under `$lib/lib/`, headers under `$dev/include/`, `bin/brotli` under `$out/bin/`, no package-level workaround needed. Details in `nix/packages/brotli.nix`. |
 | leveldb (~39 real TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 0d233d3 + 1347c8c) | -- | Original cmake-source-path bug (every real per-TU compile failing with `cc1plus: fatal error: db/c.cc: No such file or directory`, a fourth confirmed instance) is fixed upstream (dyn-drvs 97a987d) -- confirmed all 39 real per-TU compiles now succeed, plus `make install` (cmake+make's own install-time error, separately fixed by dyn-drvs 0d233d3, also doesn't recur). Was then blocked by a second confirmation of the already-documented `split-postinstall-before-restore-bug.md`: leveldb's `postInstall` runs `substituteInPlace "$out"/lib/cmake/leveldb/leveldbTargets.cmake ...`, which failed with `substitute(): ERROR: file '.../leveldbTargets.cmake' does not exist` -- `postInstall` fires inside nixpkgs' `installPhase` itself, strictly before `phases.split`'s `dyndrvRestoreOutput` phase copies the placeholder-rooted tree into the real `$out`. Confirmed still open against dyn-drvs dc07a0a (unrelated to that fix's `-Wl,`-unglue mechanism). **FIXED upstream in dyn-drvs 1347c8c** ("Fix phases.split: dyndrvRestoreOutput ran too late for postInstall reading $out (task #140)") -- confirmed directly: `dyndrv-leveldb` now builds clean end to end, real `libleveldb.so.1.23.0` verified as a genuine ELF binary, and the previously-missing `leveldbTargets.cmake` now exists in the real `-dev` output. Details in `nix/packages/leveldb.nix`. |
 | x264 | cold build | -- | pass (with 2 package-level workarounds) | -- | Autotools-style `./configure` + hand-written Makefile (NOT cmake -- explicitly ruled out ahead of time as a cmake candidate, tried anyway per instruction). Hit two NEW dyn-drvs bugs: (1) x264's own `configure` probes `gcc-ranlib --version`/`gcc-ar --version` for LTO-plugin detection, and the `ar`/`ranlib` shims (unlike `cc`'s) have no info-query passthrough, so the probe gets deferred and misparses `--version` as the archive-to-ranlib-in-place, registering a bogus `dyndrv-__version` stub that fails outright; (2) once patched around, real compiles and a real `cc`-driven `libx264.so.165` link both succeed (notably NOT hitting the open zstd/pcre2/mpfr discoverTree link-step bug), but `phases.split`'s single-output phase 1 makes nixpkgs' own `multiple-outputs.sh` fall back `outputLib -> out`, so x264's real `--libdir` content lands under phase 1's `$out/lib` and `dyndrvRestoreOutput`'s `_multioutDevs`/`_multioutDocs` calls never redistribute it into the real `$lib` output, so `$lib` is never created. Both worked around at the package level (postPatch to skip the probe, preFixup to move `$out/lib` into `$lib/lib`); real, runnable `bin/x264` confirmed (`x264 --version`). RETESTED against dyn-drvs 227b1a6/97a987d: still pass, both workarounds still required -- 227b1a6's own `isProbe` fix doesn't cover x264's specific `gcc-ranlib --plugin <path> --version` probe shape (the plugin path is itself a non-flag positional argument). Details in `nix/packages/x264.nix`. |
 | libwebp (~171 TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 28af81d + dc07a0a) | -- | Single-output, cmake build -- picked specifically to dodge the multi-output gaps (openssl/libpng). Hit THREE distinct, sequentially-uncovered bugs on the way to a real pass: (1) cmake-source-path bug (every real TU compile failing identically, e.g. `cc1: fatal error: /build/source/examples/dwebp.c: No such file or directory`), fixed by dyn-drvs 97a987d; (2) `ar`/`ranlib` archive step failing with `ar: /nix/store/<hash>-example_util.c.o: No such file or directory` (`inputs.drvs = {}`, same shape as openjpeg), fixed by dyn-drvs 28af81d; (3) a `cc -shared` link step failing with `ld.bfd: cannot open dependency file CMakeFiles/webpdecoder.dir/link.d: No such file or directory` (wrapCommand's output-dirname precreation not unglueing `-Wl,`-style flags first), fixed by dyn-drvs dc07a0a. Retested against dc07a0a: `dyndrv-libwebp` now builds clean end to end -- real `libwebp.so.7.2.0`/`bin/cwebp`/`bin/dwebp` etc, verified as genuine ELF binaries. See `nix/packages/libwebp.nix`. |
@@ -70,7 +70,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Eight bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Nine bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -161,6 +161,26 @@ patching dyn-drvs' source); documented in the relevant
    already succeeded for real. **FIXED in dyn-drvs 0d233d3** ("Fix
    phases.split cmake+make out-of-tree install failure (task #138)");
    capnproto now builds clean end to end.
+9. **`__structuredAttrs = true` silently defeats `sandboxedDrv`'s own
+   `out = dyndrvPlaceholderOut` override** (brotli) -- under
+   `structuredAttrs`, Nix's own builder generates the sandboxed shell's
+   env vars FROM the derivation's real, computed CA output path (via
+   `NIX_ATTRS_SH_FILE`, sourced before `stdenv/setup` even runs),
+   completely ignoring the literal `out = dyndrvPlaceholderOut`
+   attribute two lines below. Every real per-TU compile/link still
+   succeeded, but nothing ever went through the placeholder-then-
+   restore mechanism at all -- cmake's own `-- Installing:` log lines
+   showed the REAL computed store path directly, and the final
+   derivation failed outright ("failed to produce output path for
+   output 'lib'"). What initially looked like a distinct
+   `dyndrvRestoreOutput` tree-flattening bug (real content landing flat
+   at `$out`'s top level instead of under `lib/`/`include/`) turned out
+   to be a symptom of this same root cause: the placeholder-copy step
+   found nothing under the placeholder to copy at all. **FIXED in
+   dyn-drvs 2cb6b4d** ("Fix phases.split: force __structuredAttrs =
+   false on sandboxedDrv (task #143)") -- forces this off on phase 1's
+   own synthetic derivation regardless of the caller's own setting;
+   brotli now builds clean end to end.
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
@@ -187,16 +207,16 @@ flake outputs; not package-fixable at this layer):
   `inputs.drvs` gap, `-Wl,`-glued link.d path) before landing a full
   **PASS** once all three fixes were in place (dyn-drvs 97a987d +
   28af81d + dc07a0a) -- see table above.
-- **brotli: original cmake-source-path bug fixed upstream (dyn-drvs
-  97a987d), now blocked by a distinct restore-path flattening bug.**
-  See table above -- BLOCKED, real forward progress though: this was
-  initially the fourth confirmed instance of the cmake-source-path bug
-  (in-tree, plain cmake+make generator, ruling out "out-of-tree
-  cmakeDir" and "ninja generator" as necessary conditions), now
-  superseded by a still-open, more precisely root-caused bug where real
-  installed content lands flat at `$out`'s top level instead of under
-  `lib/`/`include/`, confirmed still open against the latest pushed
-  dyn-drvs commit (5468402).
+- **brotli: PASS, fixed upstream (dyn-drvs 97a987d + 2cb6b4d).** See
+  table above -- this was initially the fourth confirmed instance of
+  the cmake-source-path bug (in-tree, plain cmake+make generator,
+  ruling out "out-of-tree cmakeDir" and "ninja generator" as necessary
+  conditions), fixed by 97a987d. Then blocked by what looked like a
+  restore-path flattening bug (real content landing flat at `$out`'s
+  top level) but turned out to be a THIRD, deeper bug: brotli's real
+  recipe sets `__structuredAttrs = true;`, which silently defeated
+  `phases.split`'s own `out = dyndrvPlaceholderOut` override on phase 1
+  entirely -- fixed upstream in 2cb6b4d (task #143), confirmed PASS.
 - **re2: FAIL, new bug.** 20 of ~51 compile-unit derivations fail with
   `cc1plus: fatal error: <src>.cc: No such file or directory` -- at the
   *compile* step, not link, and for real primary source files, not
