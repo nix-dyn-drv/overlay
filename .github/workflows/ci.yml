@@ -89,11 +89,12 @@ jobs:
       # plain stdenv override, but need nixgg's own patched-nix + feature
       # flags (see run-nixgg-ci.sh) -- the ambient daemon lacks
       # ca-derivations/dynamic-derivations by default. nixgg-lua(-batch)
-      # is a new, non-stdenv-override mkNixggBuild example testing
-      # batchGroups' TU-batching win.
-      - name: Build nixgg-mechanism packages (openssl, hello, mosh, zstd, lua)
+      # tests batchGroups' TU-batching win; libb64-nixgg is a two-phase
+      # escape hatch for self-exec-mid-build, contrasting dyn-drvs'
+      # permanent exec-bit limitation on this exact package.
+      - name: Build nixgg-mechanism packages (openssl, hello, mosh, zstd, lua, libb64)
         run: |
-          for attr in openssl hello mosh zstd nixgg-lua nixgg-lua-batch; do
+          for attr in openssl hello mosh zstd nixgg-lua nixgg-lua-batch libb64-nixgg; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/nixgg-$attr.log"
