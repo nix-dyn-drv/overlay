@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789455145397,
+  "lastUpdate": 1789493653695,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -840,6 +840,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.51,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f959260964e738789836f4bdac248df9c05e74bf",
+          "message": "Merge pull request #17 from nix-dyn-drv/re2-package\n\nAdd re2 (cmake+ninja, ~51 TUs) -- PASS, fixed upstream by dyn-drvs 97a987d + 0d233d3",
+          "timestamp": "2026-09-15T13:19:51-04:00",
+          "tree_id": "5897c9015d436a76a44cc252bde2313d66851aa4",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/f959260964e738789836f4bdac248df9c05e74bf"
+        },
+        "date": 1789493652895,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.59,
             "unit": "x"
           }
         ]
