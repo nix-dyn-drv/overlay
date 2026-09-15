@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789441821413,
+  "lastUpdate": 1789448524952,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -695,6 +695,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.58,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "728fa4d7a353d7a224470bee98a932a456b54ad5",
+          "message": "Merge pull request #12 from nix-dyn-drv/x265-package\n\nAdd x265 (cmake, ~99 TUs) -- PASS, fixed 28af81d + worked around multibitdepthSupport",
+          "timestamp": "2026-09-15T00:43:59-04:00",
+          "tree_id": "2e7ea12bfd4f67fdfc0f2a625f686ed83d6ab1bc",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/728fa4d7a353d7a224470bee98a932a456b54ad5"
+        },
+        "date": 1789448524389,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.56,
             "unit": "x"
           }
         ]
