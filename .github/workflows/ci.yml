@@ -162,14 +162,14 @@ jobs:
           auto-push: true
 
       # Informational: won't fail the job, just flags when a dyn-drvs fix lands.
-      - name: "Blocked tiers (informational, non-blocking): zstd, mosh, tinycbor"
+      - name: "Blocked tiers (informational, non-blocking): zstd, mosh, tinycbor, libpng, libtasn1"
         continue-on-error: true
         run: |
           {
             echo "### Blocked-tier status (see nix/packages/*.nix)"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
-          for attr in dyndrv-zstd dyndrv-mosh dyndrv-tinycbor; do
+          for attr in dyndrv-zstd dyndrv-mosh dyndrv-tinycbor dyndrv-libpng dyndrv-libtasn1; do
             echo "::group::Attempting .#$attr (expected to fail, see nix/packages/$attr.nix)"
             if ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths \
                 ".#$attr" > "/tmp/$attr.log" 2>&1; then
