@@ -55,6 +55,14 @@
 # detection: recognize meson's own probe naming convention
 # (`testfile.<ext>`/`sanitycheck*`), mirroring the existing
 # `isConftest`/`isCMakeProbe` cases.
+#
+# RETESTED against dyn-drvs 2cb6b4d (includes 227b1a6, 97a987d,
+# 28af81d, dc07a0a, 1347c8c, and the newer __structuredAttrs fix from
+# task #143) -- still open, identical failure: real TUs
+# (bitdepth_16/ipred_prepare_tmpl etc.) now compile for real (confirming
+# the ar-probe-crash fix still holds), but the SAME
+# `-Wshorten-64-to-32` unrecognized-option failure recurs verbatim.
+# None of the intervening fixes touch meson-probe detection.
 
 {
   pkgs,
