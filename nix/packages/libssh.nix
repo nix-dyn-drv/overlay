@@ -1,4 +1,4 @@
-# libssh -- BLOCKED. cmake build (~110+ TUs: SSH client library over
+# libssh -- PASS. cmake build (~110+ TUs: SSH client library over
 # openssl/zlib/libsodium; `out`+`dev` outputs).
 #
 # Originally hit the discoverTree cmake-source-path bug already
@@ -37,27 +37,49 @@
 # compile, the `ar`/`ranlib` archive step, and the final `.so` link all
 # succeed, producing a genuine `libssh.so.4.12.0`.
 #
-# That workaround exposed a SECOND, distinct, still-open bug: `fixupPhase`'s
+# That workaround exposed a SECOND, distinct bug (since fixed): `fixupPhase`'s
 # `postFixup` (nixpkgs' own libssh recipe: `substituteInPlace
-# $dev/lib/cmake/libssh/libssh-config.cmake ...`) fails --
+# $dev/lib/cmake/libssh/libssh-config.cmake ...`) failed --
 #
 #   substitute(): ERROR: file '.../libssh-0.12.2-dev/lib/cmake/libssh/libssh-config.cmake' does not exist
 #
 # NOT the same bug as leveldb's `split-postinstall-before-restore-bug.md`
-# (fixed by dyn-drvs 1347c8c): `dyndrvRestoreOutput` already runs BEFORE
-# `fixupPhase` for this package (confirmed via the build log's own
-# phase-order trace), so ordering isn't the issue here. `libssh`'s `$dev`
-# output is never populated with `lib/cmake/libssh` content at all --
-# `_multioutDevs`'s own `moveToOutput lib/cmake "${!outputDev}"` call
-# (declared by nixpkgs' `multiple-outputs.sh`, invoked unconditionally by
-# `dyndrvRestoreOutput`) produces no visible "Moving ..." log output,
-# meaning it silently found nothing under `$out/lib/cmake` to move.
-# Root cause not yet isolated (plausibly interacts with `dyndrvMoveFromOut`'s
-# newer bin/lib/libexec restructuring from dyn-drvs e5f9a61, but not
-# confirmed). Still BLOCKED even with the linker-script workaround
-# applied -- no package-level workaround found for this second bug (the
-# `$dev`/`lib/cmake` split happens entirely inside `dyndrvRestoreOutput`,
-# nothing libssh's own recipe controls).
+# (fixed by dyn-drvs 1347c8c): `dyndrvRestoreOutput` already ran BEFORE
+# `fixupPhase` for this package, so ordering wasn't the issue. This
+# turned out to be the SAME class of gap task #139's `dyndrvMoveFromOut`
+# fix (dyn-drvs e5f9a61) addressed for `bin`/`lib` content, generalized
+# by that same fix to `lib/cmake` once retested against a dyndrv pin
+# that included it -- confirmed the file now EXISTS in `$dev`.
+#
+# That exposed a THIRD, distinct bug (also now fixed): the file existed,
+# but `substituteInPlace` still failed --
+#
+#   substitute(): ERROR: pattern set\(_IMPORT_PREFIX\ \"/nix/store/<hash>-libssh-0.12.2\"\) doesn't match anything in file '.../libssh-config.cmake'
+#
+# cmake's own `install(EXPORT libssh-config ...)` bakes phase 1's
+# LITERAL placeholder path (`/build/dyndrv-placeholder-out`) into the
+# generated file's `_IMPORT_PREFIX` at configure time -- since phase 1
+# forces a single output, every `CMAKE_INSTALL_*DIR` cmake sees is an
+# absolute path under that ONE placeholder root, which tips cmake into
+# emitting a literal `set(_IMPORT_PREFIX "...")` (confirmed via direct
+# `nix log` inspection: the baked string was the exact placeholder, not
+# `$out` or a relative `get_filename_component` computation). Nixpkgs'
+# own `postFixup` naturally expects to find the REAL `$out`'s literal
+# path there (since that's what an ordinary, unaccelerated build's own
+# `install(EXPORT)` would have baked in), not the placeholder --
+# `dyndrvCopyPlaceholderScript` copied the file's content byte-for-byte
+# but never rewrote this embedded string. FIXED upstream in dyn-drvs
+# bb1c077 ("Fix phases.split: rewrite placeholder path baked into
+# copied file content (task #145)") -- a generic `grep -rl`/`sed -i`
+# pass over every text file under `$out` after the placeholder copy,
+# rewriting any surviving reference to the placeholder path to the real
+# `$out`.
+#
+# RETESTED against dyn-drvs bb1c077 (includes 97a987d, e5f9a61, and this
+# session's own `_IMPORT_PREFIX` fix): `dyndrv-libssh` now builds clean
+# end to end -- real `libssh.so.4.12.0` verified as a genuine ELF shared
+# object, and `$dev/lib/cmake/libssh/libssh-config.cmake`'s own
+# `_IMPORT_PREFIX` now correctly reads the real `$dev` store path.
 
 {
   pkgs,
