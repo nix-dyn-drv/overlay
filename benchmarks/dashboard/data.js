@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789450111044,
+  "lastUpdate": 1789451287482,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -748,6 +748,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/nix-dyn-drv/overlay/commit/5480ccc724276a7e2d8c90bd9d4be514ab6478c1"
         },
         "date": 1789450110502,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.61,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0e0c50e5452ed41f92ce745d244fe6b120ff4e72",
+          "message": "Merge pull request #5 from nix-dyn-drv/libssh-package\n\nAdd libssh (CMake, ~110+ TUs) -- PASS: linker-script worked around, $dev/lib/cmake and _IMPORT_PREFIX bugs fixed upstream",
+          "timestamp": "2026-09-15T01:32:05-04:00",
+          "tree_id": "90c94d8c41b728a993246f56cf48bdb14be00b83",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/0e0c50e5452ed41f92ce745d244fe6b120ff4e72"
+        },
+        "date": 1789451286443,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
