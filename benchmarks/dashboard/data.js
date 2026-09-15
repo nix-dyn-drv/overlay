@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789512817131,
+  "lastUpdate": 1789512896500,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -956,6 +956,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d1cdd5160c2375c7ec3c17c27aba1d5dcf2fefb5",
+          "message": "Merge pull request #21 from nix-dyn-drv/libpng-libtasn1-package\n\nAdd libpng/libtasn1: outputBin bug fixed upstream, new libtool .so-symlink bug found",
+          "timestamp": "2026-09-15T18:37:11-04:00",
+          "tree_id": "5b6c60bf8abbe8a2f54b044a9fd9f112fe2d8c29",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/d1cdd5160c2375c7ec3c17c27aba1d5dcf2fefb5"
+        },
+        "date": 1789512895964,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.63,
             "unit": "x"
           }
         ]
