@@ -102,6 +102,8 @@
           # freetype is dyn-drvs' own example; giflib/tree/figlet/nnn are
           # new and clean. zstd/mosh/openssl/tinycbor are new and each
           # hit a distinct open dyn-drvs bug, see nix/packages/*.nix.
+          # x264 is a new PASS, but needed two package-level workarounds
+          # for two more new dyn-drvs bugs -- see nix/packages/x264.nix.
           # dyndrv-freetype-baseline: plain, unaccelerated freetype --
           # the real comparison point for benchmarks/patch-rebuild.sh
           # (dyndrv-freetype alone isn't a valid plain/accelerated pair).
@@ -158,6 +160,24 @@
           };
 
           dyndrv-brotli = import ./nix/packages/brotli.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-leveldb = import ./nix/packages/leveldb.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-x264 = import ./nix/packages/x264.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
+          dyndrv-libwebp = import ./nix/packages/libwebp.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
             nixPackage = dyndrvPatchedNix;
