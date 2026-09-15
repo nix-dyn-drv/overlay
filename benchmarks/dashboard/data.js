@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789493653695,
+  "lastUpdate": 1789508432748,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -869,6 +869,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.59,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c797f0c006ffb863cc9b6a12b6b7ffb61f949467",
+          "message": "Merge pull request #19 from nix-dyn-drv/nixgg-lua-batching\n\nAdd nixgg-lua/nixgg-lua-batch: test batchGroups against freetype's registration-overhead loss",
+          "timestamp": "2026-09-15T17:22:40-04:00",
+          "tree_id": "16f66d27fd24a6eefcb9828b4ce6bee125c87cbe",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/c797f0c006ffb863cc9b6a12b6b7ffb61f949467"
+        },
+        "date": 1789508432048,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.62,
             "unit": "x"
           }
         ]
