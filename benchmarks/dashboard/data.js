@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789424644463,
+  "lastUpdate": 1789441821413,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -661,6 +661,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/nix-dyn-drv/overlay/commit/9d048240e8344979b37b64b1cc70dc5c098cbb50"
         },
         "date": 1789424643846,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.58,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bc9531df2263b5c43a338b0ebf2c1a2ff9222436",
+          "message": "Merge pull request #3 from nix-dyn-drv/leveldb-package\n\nAdd leveldb (CMake, ~39 real TUs) -- PASS, fixed upstream by dyn-drvs 1347c8c",
+          "timestamp": "2026-09-14T22:50:30-04:00",
+          "tree_id": "5284e73f8e427be4f22529b1d89d4e087d011f24",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/bc9531df2263b5c43a338b0ebf2c1a2ff9222436"
+        },
+        "date": 1789441820761,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
