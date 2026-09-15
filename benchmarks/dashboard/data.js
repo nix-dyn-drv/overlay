@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789508432748,
+  "lastUpdate": 1789508457203,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -898,6 +898,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.62,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "86defd4e0476f5715551fd9608593b3d062bbf1c",
+          "message": "Merge pull request #20 from nix-dyn-drv/gperf-package\n\nAdd gperf: dyn-drvs' depfile side-output bug is fixed upstream",
+          "timestamp": "2026-09-15T17:22:52-04:00",
+          "tree_id": "43f271fbfdbeffcb611f0a89dda4eb69d43cd40f",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/86defd4e0476f5715551fd9608593b3d062bbf1c"
+        },
+        "date": 1789508456679,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.57,
             "unit": "x"
           }
         ]
