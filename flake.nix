@@ -165,6 +165,12 @@
             nixPackage = dyndrvPatchedNix;
           };
 
+          dyndrv-leveldb = import ./nix/packages/leveldb.nix {
+            inherit pkgs;
+            dyndrv = dyndrvLib;
+            nixPackage = dyndrvPatchedNix;
+          };
+
           dyndrv-x264 = import ./nix/packages/x264.nix {
             inherit pkgs;
             dyndrv = dyndrvLib;
