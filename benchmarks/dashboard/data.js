@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789448524952,
+  "lastUpdate": 1789450111044,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -724,6 +724,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.56,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5480ccc724276a7e2d8c90bd9d4be514ab6478c1",
+          "message": "Merge pull request #10 from nix-dyn-drv/protobuf-package-v2\n\nAdd protobuf (cmake, ~221 TUs) -- PASS, 2 package-level workarounds",
+          "timestamp": "2026-09-15T01:10:21-04:00",
+          "tree_id": "6a18114a9837c6476c6e080c4ff7c44aead3fe11",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/5480ccc724276a7e2d8c90bd9d4be514ab6478c1"
+        },
+        "date": 1789450110502,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.61,
             "unit": "x"
           }
         ]
