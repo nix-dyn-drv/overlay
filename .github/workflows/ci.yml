@@ -51,16 +51,16 @@ jobs:
       - name: Verify run-nix-ci.sh can fetch+build a working Nix
         run: ./try-it-out/run-nix-ci.sh --version
 
-      # Tier 0 (freetype, giflib, tree, figlet, nnn) are the dyn-drvs
-      # packages that build clean end to end (benchmarks/RESULTS.md);
-      # hard gate here. zstd/mosh/openssl/tinycbor each hit a distinct
-      # open dyn-drvs bug (nix/packages/{zstd,mosh,openssl,tinycbor}.nix)
-      # and run informationally below instead, so this job's pass/fail
-      # tracks regressions in the proven path, not upstream bugs it
-      # can't fix.
-      - name: Build proven dyndrv packages (freetype, giflib, tree, figlet, nnn)
+      # Tier 0 (freetype, giflib, tree, figlet, nnn, gperf) are the
+      # dyn-drvs packages that build clean end to end
+      # (benchmarks/RESULTS.md); hard gate here. zstd/mosh/openssl/
+      # tinycbor each hit a distinct open dyn-drvs bug
+      # (nix/packages/{zstd,mosh,openssl,tinycbor}.nix) and run
+      # informationally below instead, so this job's pass/fail tracks
+      # regressions in the proven path, not upstream bugs it can't fix.
+      - name: Build proven dyndrv packages (freetype, giflib, tree, figlet, nnn, gperf)
         run: |
-          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/$attr.log"

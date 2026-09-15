@@ -55,6 +55,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | libwebp (~171 TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 97a987d + 28af81d + dc07a0a) | -- | Single-output, cmake build -- picked specifically to dodge the multi-output gaps (openssl/libpng). Hit THREE distinct, sequentially-uncovered bugs on the way to a real pass: (1) cmake-source-path bug (every real TU compile failing identically, e.g. `cc1: fatal error: /build/source/examples/dwebp.c: No such file or directory`), fixed by dyn-drvs 97a987d; (2) `ar`/`ranlib` archive step failing with `ar: /nix/store/<hash>-example_util.c.o: No such file or directory` (`inputs.drvs = {}`, same shape as openjpeg), fixed by dyn-drvs 28af81d; (3) a `cc -shared` link step failing with `ld.bfd: cannot open dependency file CMakeFiles/webpdecoder.dir/link.d: No such file or directory` (wrapCommand's output-dirname precreation not unglueing `-Wl,`-style flags first), fixed by dyn-drvs dc07a0a. Retested against dc07a0a: `dyndrv-libwebp` now builds clean end to end -- real `libwebp.so.7.2.0`/`bin/cwebp`/`bin/dwebp` etc, verified as genuine ELF binaries. See `nix/packages/libwebp.nix`. |
 | openjpeg (~76 TUs, cmake, 2-output) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 28af81d) | -- | Retested against dyn-drvs 28af81d ("Fix ar shim: declare its own real .o/archive inputs as derivation deps"): `dyndrv-openjpeg` now builds clean end to end -- real `libopenjp2.so`/`bin/opj_decompress`/`bin/opj_compress`/etc, verified as genuine ELF binaries. Previously (last tested against dyn-drvs 0d233d3) every real per-TU compile succeeded but the first `ar`-driven static-lib link failed: `ar: /nix/store/<hash>-thread.c.o: No such file or directory`, `nix derivation show` confirming `inputs.drvs = {}` for the `ar` derivation -- `arToNode`/`ranlibToNode` never scanned their own positional args for resolved store paths the way `ccToNode`'s `extraStorePaths` already did; 28af81d fixes exactly this. Details in `nix/packages/openjpeg.nix`. |
 | capnproto (~187 .c++ TUs) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 0d233d3) | -- | Retested against dyn-drvs 0d233d3 ("Fix phases.split cmake+make out-of-tree install failure (task #138)"): `dyndrv-capnproto` now builds clean end to end -- real `libkj.so`/`libcapnp.so`/`libcapnp-rpc.so`/`libkj-async.so`/etc and `bin/capnp`/`bin/capnpc-c++`/`bin/capnpc-capnp` all present, `capnp --version` prints `Cap'n Proto version 1.4.0`. Previously (as last tested against dyn-drvs 227b1a6) every real per-TU compile AND link succeeded (`buildPhase completed in 39 seconds`) but `installPhase` failed: `CMake Error: The source directory "/build/source" does not exist` / `make: *** [Makefile:383: cmake_check_build_system] Error 1` -- distinct from the compile-time discoverTree cmake-source-path bug (tinycbor/xxHash/re2): `phases.split`'s phase 2 forced `sourceRoot = "."`, so its `unpackPhase` never recreated the `/build/source` subdirectory cmake's own cached `CMAKE_HOME_DIRECTORY` (baked into `CMakeCache.txt` at phase 1 configure time) still pointed at -- the existing `dyndrvCdToBuildDir` reconstruction logic previously only triggered for meson's `build.ninja` marker, never for cmake+make; 0d233d3 generalizes it to cmake+make too. (Package itself still required a package-level workaround just to eval: nixpkgs' by-name `capnproto` takes a `clangStdenv` argument, not `stdenv`, since GCC ICEs on its C++20 coroutines -- worked around here by accelerating `clangStdenv` directly.) Details in `nix/packages/capnproto.nix`. |
+| gperf (~20 TUs, autotools) | cold build | all TUs compiled+linked | **PASS** (fixed by dyn-drvs 9dc8037) | -- | Originally BLOCKED: every real per-TU compile succeeded, but the immediately-following Makefile line always failed -- `mv: cannot stat '.deps/hash.Tpo': No such file or directory`. Automake's classic depcomp idiom (`-MT $@ -MD -MP -MF .deps/$*.Tpo -c -o $@`) writes a SECOND file per compile invocation as a byproduct; only the primary `-o` output was tracked/staged back out of the per-TU sandbox, so the depfile never reached the outer `mv`. **FIXED upstream in dyn-drvs 9dc8037** ("Fix wrapCommand: touch empty -MF depfile at defer time (task #148)") -- since Nix always rebuilds fully from scratch (no incremental depfile reuse the way a real `make` re-run would exploit), the depfile's CONTENT never matters, only its EXISTENCE for the following `mv`; `finalizeTail` now touches an empty file at the `-MF` path directly. Confirmed directly: `dyndrv-gperf` now builds clean end to end, all ~20 real per-TU compiles succeed, producing a genuine, runnable `bin/gperf`. Details in `nix/packages/gperf.nix`. |
 | openssl | Checkpoint A (baseline cold) | -- | pass, substituted | -- | Cold plain openssl-3.6.3 substitutes fully from cache.nixos.org. |
 | openssl | Checkpoint B (accelerated evaluates/builds) | -- | **NO-GO** | -- | Fails at eval time: `error: attribute 'finalPackage' missing`. `mkAcceleratedStdenv`'s `finalAttrs` shim doesn't inject `finalPackage` the way nixpkgs' `makeOverridable` does; openssl's recipe reads `finalAttrs.finalPackage.doCheck` at 3 call sites. freetype never hits this since it doesn't reference `finalPackage`. Details in `nix/packages/openssl.nix`. |
 | openssl | Checkpoint C (argv inspection) | -- | NOT REACHED | -- | Blocked by B's eval-time failure; the `-DOPENSSLDIR=`/placeholder risk remains untested. |
@@ -74,7 +75,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 
 ## Findings fed back to dyn-drvs
 
-Fourteen bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
+Fifteen bugs in `accelerate.mkAcceleratedStdenv`/`phases.split`, beyond what
 its own freetype proof point exercises. Not fixed here (would mean
 patching dyn-drvs' source); documented in the relevant
 `nix/packages/*.nix` header:
@@ -275,13 +276,29 @@ patching dyn-drvs' source); documented in the relevant
    around at the package level instead (x265's own
    `multibitdepthSupport = false` avoids the whole code path that bakes
    in this linkage, at the cost of dropping 10/12-bit HDR support).
+15. **A depfile side-output (`-MF <path>`) never round-trips back to the
+   caller's tree** (gperf) -- automake's classic depcomp idiom
+   (`-MT $@ -MD -MP -MF .deps/$*.Tpo -c -o $@`) writes a SECOND file per
+   compile invocation as a byproduct; `toNode`/`collectStubs` only track
+   ONE resolved output per compile stub (the `-o`/`-c` positional argv),
+   so the depfile was never staged back into the shared tree the
+   outer `make` process's own next command (`mv .Tpo .Po`) reads from.
+   **FIXED in dyn-drvs 9dc8037** ("Fix wrapCommand: touch empty -MF
+   depfile at defer time (task #148)") -- since Nix always rebuilds
+   fully from scratch (no cross-derivation incremental-depfile reuse
+   the way a real `make` re-run would exploit), the depfile's CONTENT
+   is irrelevant, only its EXISTENCE matters for the immediately-
+   following `mv`; `finalizeTail` now touches an empty file at the
+   `-MF` path directly in the outer tree. Confirmed directly against
+   real gperf: every one of its ~20 real per-TU compiles now succeeds
+   end to end, producing a genuine, runnable `bin/gperf`.
 
 
 Every tier attempted beyond freetype found a distinct, previously-unknown
 gap -- `mkAcceleratedStdenv` generalizes less readily than its README
 implies.
 
-## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, brotli, libpng, libtasn1, gperf)
+## Wider package survey (xxHash, re2, libb64, mpfr, tinycbor, brotli, libpng, libtasn1)
 
 A follow-up sweep against more nixpkgs packages, beyond the ones wired
 into this flake's outputs, turned up five distinct new failure modes
@@ -345,16 +362,11 @@ flake outputs; not package-fixable at this layer):
   reproduced. Likely affects any package that sets `outputBin`/
   `outputMan`/`outputDev` explicitly -- a common pattern for small
   libraries whose only binary is a dev-only helper.
-- **gperf: FAIL, new bug.** Gets much further than libpng/libtasn1: real
-  per-TU compiles succeed, then every single one fails at the very next
-  Makefile line: `mv: cannot stat '.deps/hash.Tpo': No such file or
-  directory`. Automake's classic depcomp idiom (`-MD -MP -MF
-  .deps/$*.Tpo` alongside `-c -o $@`) writes a SECOND file per compile
-  invocation that dyn-drvs doesn't track or stage back -- only the
-  primary `-o` output round-trips out of the per-TU sandbox. Independently
-  reproduced. Extremely common pattern across autotools C/C++ projects.
+- **gperf: PASS, fixed upstream (dyn-drvs 9dc8037).** Wired into this
+  flake as `dyndrv-gperf` (see table above) -- was FAIL, now builds
+  clean end to end.
 
-Eight for eight of the packages above hit an autotools- or cmake-shaped
+Seven for eight of the packages above hit an autotools- or cmake-shaped
 bug. The common factor in every actual PASS so far (giflib, tree,
 figlet, nnn) is a plain, hand-written Makefile with no `configure`
 script and no cmake -- the autotools depcomp idiom and cmake's
