@@ -465,6 +465,19 @@
         "type": "github"
       }
     },
+    "linux-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1731881708,
+        "narHash": "sha256-49t94CaLdkxrmxG9Wie+p1wk6VNhraawR0vOjoFR3bY=",
+        "type": "tarball",
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz"
+      }
+    },
     "llvm-src": {
       "flake": false,
       "locked": {
@@ -483,6 +496,19 @@
       }
     },
     "lua-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1718316991,
+        "narHash": "sha256-o1jnQCcnlk2OXU4Cc8X7bJiOU2QN92vd91TtBhNM/hU=",
+        "type": "tarball",
+        "url": "https://www.lua.org/ftp/lua-5.4.7.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://www.lua.org/ftp/lua-5.4.7.tar.gz"
+      }
+    },
+    "lua-src_2": {
       "flake": false,
       "locked": {
         "lastModified": 1718316991,
@@ -637,21 +663,24 @@
         "ffmpeg-src": "ffmpeg-src",
         "fmt-src": "fmt-src",
         "gcc-src": "gcc-src",
+        "linux-src": "linux-src",
         "llvm-src": "llvm-src",
-        "lua-src": "lua-src",
+        "lua-src": "lua-src_2",
         "mosh-src": "mosh-src",
         "nix-15793": "nix-15793",
         "nixpkgs": [
           "nixpkgs"
         ],
+        "postgresql-src": "postgresql-src",
+        "qemu-src": "qemu-src",
         "redis-src": "redis-src"
       },
       "locked": {
-        "lastModified": 1787939553,
-        "narHash": "sha256-N2h2/L2VJ34etJ9SbLhMR03RYdSjdLstAtmfWIMi134=",
+        "lastModified": 1789421313,
+        "narHash": "sha256-qrecJe5UhBQnLwEdxvYlisQeuQH8YdkqsPGcx+qCcdI=",
         "owner": "tomberek",
         "repo": "nixgg",
-        "rev": "976a9308449e64e22ab6e81a4c54f1bfc827603e",
+        "rev": "5e86dba084d94ecb54ee5f3e28a2fc8a66e91e5c",
         "type": "github"
       },
       "original": {
@@ -798,6 +827,32 @@
         "type": "github"
       }
     },
+    "postgresql-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1731961932,
+        "narHash": "sha256-P7IwvMcOI6vW14PiB2R0NEzAEPeaKg0zaUKTw2GJ5DA=",
+        "type": "tarball",
+        "url": "https://ftp.postgresql.org/pub/source/v17.2/postgresql-17.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://ftp.postgresql.org/pub/source/v17.2/postgresql-17.2.tar.gz"
+      }
+    },
+    "qemu-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1733874468,
+        "narHash": "sha256-YLhprPL1P+0LCC6N67TGuqCzklHG/mGUU9Kg6lCb66Q=",
+        "type": "tarball",
+        "url": "https://download.qemu.org/qemu-9.2.0.tar.xz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://download.qemu.org/qemu-9.2.0.tar.xz"
+      }
+    },
     "redis-src": {
       "flake": false,
       "locked": {
@@ -819,6 +874,7 @@
       "inputs": {
         "drowse": "drowse",
         "dyndrv": "dyndrv",
+        "lua-src": "lua-src",
         "nixNinja": "nixNinja",
         "nixgg": "nixgg",
         "nixpkgs": "nixpkgs_5"
