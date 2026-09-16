@@ -6,90 +6,232 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff; color: #222; }
-  body { max-width: 780px; margin: 3rem auto; padding: 0 1.5rem; line-height: 1.6; }
+  body { max-width: 860px; margin: 3rem auto; padding: 0 1.5rem; line-height: 1.6; }
   h1 { font-size: 1.6rem; margin-bottom: 0.3rem; }
   h2 { font-size: 1.1rem; margin-top: 2.2rem; border-bottom: 1px solid #eee; padding-bottom: 0.3rem; }
   a { color: #0969da; text-decoration: none; }
   a:hover { text-decoration: underline; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.88rem; }
   th, td { border: 1px solid #d0d7de; padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
   th { background: #f6f8fa; }
   code { background: #f6f8fa; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.9em; }
-  .win { color: #1a7f37; font-weight: 600; }
-  .loss { color: #cf222e; font-weight: 600; }
-  .blocked { color: #9a6700; font-weight: 600; }
+  pre { background: #f6f8fa; padding: 0.8rem 1rem; border-radius: 4px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
   .muted { color: #656d76; font-size: 0.9rem; }
+  #top-links { margin-bottom: 1.5rem; }
 </style>
 </head>
 <body>
 
 <h1>overlay</h1>
-<p class="muted">Showcasing Nix dynamic derivations against real nixpkgs C/C++ packages, via two independent mechanisms.</p>
+<p class="muted">Showcasing Nix dynamic derivations against real nixpkgs C/C++ packages, via four independent mechanisms.</p>
 
-<p>
+<p id="top-links">
   <a href="benchmarks/dashboard/">→ Live benchmark trend chart</a> ·
   <a href="https://github.com/nix-dyn-drv/overlay">→ Source</a> ·
-  <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">→ Full results (RESULTS.md)</a>
+  <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">→ RESULTS.md on GitHub</a>
 </p>
 
-<h2>The headline number</h2>
-<p>
-  <a href="https://github.com/tomberek/nixgg">nixgg</a>'s mechanism rebuilds only
-  <strong>2 of openssl's 2213 translation units</strong> on a one-line patch, and its
-  <code>batchGroups</code> feature collapses lua's ~30 per-TU compiles into 1
-  archive derivation for a <strong>1.71x</strong> build-phase win.
-  <a href="https://github.com/tomberek/dyn-drvs">dyn-drvs</a>' mechanism builds clean
-  on freetype, giflib, tree, figlet, and nnn, but freetype's cold build is
-  <strong>~6.7x slower</strong> than a plain rebuild (measured directly in this repo).
-  Per-TU acceleration only pays off
-  when each compile unit costs more than the ~80ms registration overhead it adds.
-  A wider survey found every dyn-drvs failure traces back to either autotools'
-  dependency-tracking idiom or cmake's generated build systems — every clean
-  pass used a plain, hand-written Makefile.
-</p>
-
-<h2>Current package status</h2>
-<table>
-  <tr><th>Package</th><th>Mechanism</th><th>Status</th><th>Notes</th></tr>
-  <tr><td>openssl</td><td>nixgg</td><td class="win">win</td><td>2/2213 TUs rebuilt on a one-line patch</td></tr>
-  <tr><td>hello, mosh, zstd</td><td>nixgg</td><td class="win">works</td><td>build cleanly end to end</td></tr>
-  <tr><td>lua</td><td>nixgg</td><td class="win">win</td><td><code>batchGroups</code> collapses 34 &rarr; 2 derivations, 1.71x on the build phase</td></tr>
-  <tr><td>libb64</td><td>nixgg</td><td class="win">win</td><td>two-phase split self-execs a just-linked binary — dyn-drvs can't do this on the same package (see below)</td></tr>
-  <tr><td>freetype</td><td>dyn-drvs</td><td class="loss">loss</td><td>~6.7x slower — too little per-TU compile cost</td></tr>
-  <tr><td>giflib, tree, figlet, nnn</td><td>dyn-drvs</td><td class="win">works</td><td>plain hand-written Makefile, no configure/cmake</td></tr>
-  <tr><td>dav1d, brotli, re2, libssh, protobuf, x265, leveldb, x264, libwebp, openjpeg, capnproto, gperf</td><td>dyn-drvs</td><td class="win">works</td><td>each hit 1-3 distinct bugs, all now fixed or worked around — see RESULTS.md</td></tr>
-  <tr><td>libpng, libtasn1</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>a real bug fixed (<code>outputBin</code> override), but a new one found: libtool's unversioned <code>.so</code> symlink is never resolved</td></tr>
-  <tr><td>zstd, tinycbor, xxHash</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>cmake-driven builds hit discoverTree's cmake-source-path bug</td></tr>
-  <tr><td>mosh</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>postInstall</code> now runs before the placeholder tree gets restored to <code>$out</code></td></tr>
-  <tr><td>openssl</td><td>dyn-drvs</td><td class="blocked">no-go</td><td>missing <code>finalAttrs.finalPackage</code></td></tr>
-</table>
-<p class="muted">Full detail, exact errors, and root causes: <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">RESULTS.md</a>.</p>
-
-<h2>Bugs found in dyn-drvs</h2>
-<p>
-  Building and surveying real nixpkgs packages against this repo surfaced
-  16 distinct bugs in <code>accelerate.mkAcceleratedStdenv</code>, 12 fixed
-  upstream so far, each written up for the dyn-drvs maintainer:
-</p>
+<h2 id="benchmark-results">Benchmark results</h2>
+<p>Numbers this repo's README cites. All measured on a specific machine; losses are reported alongside wins. Full bug narratives (repro, root cause, fix commit) live in each package's <code>nix/packages/*.nix</code> header, not duplicated here.</p>
+<p>Four mechanisms compared, all implementing the same underlying Nix feature (<code>builtins.outputOf</code>, dynamic derivations) independently:</p>
 <ul>
-  <li><code>discoverTree</code>'s dependency scan can't see a link step's own inputs when the link is driven through <code>cc</code>/<code>c++</code> directly (cmake, libtool) — confirmed on zstd, pcre2, mpfr; not universal (tinycbor's own <code>cc</code>-driven links build fine).</li>
-  <li><code>autoreconfHook</code>'s dynamically-injected build phase gets silently dropped by a static phase list.</li>
-  <li>CMake's compiler-flag probes aren't recognized as passthrough-eligible, so a deferred stub falsely reports success.</li>
-  <li>The <code>finalAttrs.finalPackage</code> self-reference nixpkgs injects for ordinary packages is missing from the accelerated stdenv's own <code>mkDerivation</code>.</li>
-  <li>cmake builds can fail per-TU compiles with a source-not-found error — confirmed on xxHash, re2 (fixed), and tinycbor's real (cmake-based) recipe.</li>
-  <li>A freshly-linked binary can lose its execute bit, breaking any Makefile that runs its own just-built binary as a self-test (libb64) — a permanent architectural limitation, not fixable within dyn-drvs' single-buildPhase design. nixgg's two-phase pattern sidesteps the same wall on the same package.</li>
-  <li><code>phases.split</code> forces single-output but doesn't clear an inherited <code>outputBin</code>/<code>outputMan</code> literal override (libpng, libtasn1) — fixed.</li>
-  <li>Secondary compiler side-outputs (automake's <code>-MF</code> depfiles) don't survive the sandbox boundary, breaking the classic autotools depcomp idiom (gperf) — fixed.</li>
-  <li>A bare <code>-l&lt;name&gt;</code> link argument (a linker search-path reference, not a literal path) is never resolved back to its producing derivation (x265's 10/12-bit HDR variants).</li>
-  <li>A libtool-generated unversioned <code>.so</code> symlink is never registered as an alias for the real, versioned file dyn-drvs actually tracks — the next link step referencing it fails (libpng, libtasn1).</li>
-  <li><code>postInstall</code> can run before the placeholder-rooted build tree gets restored into the real <code>$out</code>, so it reads a directory that doesn't exist yet (mosh).</li>
+<li><strong>nixgg's <code>splitStdenv</code></strong> -- Go-based shim, proven at nixpkgs scale (<code>openssl</code>/<code>openssl-3_5</code>/<code>hello</code>/<code>mosh</code>/<code>zstd</code> outputs).</li>
+<li><strong>dyn-drvs' <code>accelerate.mkAcceleratedStdenv</code></strong> -- Nix-language library (<code>dyndrv-*</code> outputs). See <code>nix/packages/*.nix</code> headers for per-package status.</li>
+<li><strong>nix-ninja's <code>mkMesonPackage</code></strong> -- drop-in <code>ninja</code> replacement (<code>nixninja-argp</code> output), reconstructs a meson build directly rather than overriding an existing package's stdenv.</li>
+<li><strong>drowse's <code>callPackage</code></strong> -- defers a whole package's <em>evaluation</em> into a nested <code>nix-instantiate</code> (via <code>recursive-nix</code>), not a per-TU <em>build</em> split (<code>drowse-hello</code> output). The "avoid IFD" half of the dynamic-derivations story.</li>
 </ul>
+<h3 id="nixgg-mechanism-splitstdenv">nixgg mechanism (<code>splitStdenv</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Scenario</th>
+<th>TUs rebuilt</th>
+<th>Wall-clock</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>openssl (~2200 TUs)</td>
+<td>one-file patch (<code>crypto/mem.c</code>)</td>
+<td>2/2213</td>
+<td>--</td>
+<td>From nixgg's README; not re-measured here.</td>
+</tr>
+<tr>
+<td>openssl</td>
+<td>version bump (3.6.3-&gt;3.5.7)</td>
+<td>2153/2192 (98%)</td>
+<td>--</td>
+<td>Version baked into <code>opensslv.h</code>, included nearly everywhere.</td>
+</tr>
+<tr>
+<td>openssl, hello, mosh, zstd</td>
+<td>cold build</td>
+<td>--</td>
+<td>--</td>
+<td>All four build cleanly end to end in CI (<code>.github/workflows/ci.yml</code>, real <code>/nix/store</code>, real per-TU <code>tu-*.o.drv</code> derivations submitted).</td>
+</tr>
+<tr>
+<td>lua (~30 TUs, one archive)</td>
+<td>build phase, unbatched vs <code>batchGroups</code></td>
+<td>34 -&gt; 2 derivations</td>
+<td>3.91s vs 2.29s</td>
+<td><strong>1.71x</strong>. <code>batchGroups</code> collapses 24 per-TU compiles + 1 <code>ar</code> step into a single <code>batch-liblua.a.drv</code>. Timed as build-phase-only (excludes one-time toolchain substitution, which is identical for both variants and swamps the signal if included -- a whole-<code>nix build</code> timing found only 1.02-1.07x). See <code>benchmarks/nixgg-batch-rebuild.sh</code>.</td>
+</tr>
+<tr>
+<td>libb64 (self-exec mid-build)</td>
+<td>two-phase split vs dyn-drvs' single-buildPhase limit</td>
+<td>--</td>
+<td>--</td>
+<td><strong>PASS</strong>, contrasting with dyn-drvs' permanent limitation on the SAME package (<code>discovertree-exec-bit-bug.md</code>). A one-phase <code>mkNixggBuild</code> hits the identical wall dyn-drvs does (<code>Permission denied</code> execing a just-linked, still-deferred binary) -- nixgg's own DESIGN.md names this "the synchronous-realize wall," inherent to <code>builder-rpc-v0</code> having no synchronous build op. But nixgg's two-phase pattern (phase 2 = an ORDINARY <code>stdenv.mkDerivation</code>, not another <code>mkNixggBuild</code>, with <code>buildInputs</code> forcing phase 1 to resolve to real bytes first) sidesteps it entirely: phase 1 accelerates libb64's 2 real per-TU compiles into their own dynamic derivations; phase 2 links <code>c-example1</code> against the real, resolved <code>libb64.a</code> and runs it directly. Confirmed via the build log's own real output (<code>encoded: aGVsbG8gd29ybGQ=</code> / <code>decoded: hello world</code>, not a stub). Real caveat: this only works because libb64's self-exec has a clean phase boundary reachable via <code>buildInputs</code> -- nixgg's own DESIGN.md is explicit that a build whose synchronous read-back is interleaved with acceleration-needing work on BOTH sides of that boundary remains unsolved even for nixgg. See <code>nix/packages/libb64-nixgg.nix</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dyn-drvs-mechanism-acceleratemkacceleratedstdenv">dyn-drvs mechanism (<code>accelerate.mkAcceleratedStdenv</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>freetype (~45 TUs)</td>
+<td><strong>0.15x cold build, 0.35x patch rebuild</strong></td>
+<td>Per-TU compile cost too small to amortize the ~80ms/derivation registration tax. Re-measured directly (<code>benchmarks/patch-rebuild.sh dyndrv-freetype-baseline dyndrv-freetype</code>).</td>
+</tr>
+<tr>
+<td>giflib, tree, figlet, nnn</td>
+<td><strong>PASS</strong></td>
+<td>Plain hand-written Makefiles, no configure/cmake -- the only packages that "just worked" with no bugs hit.</td>
+</tr>
+<tr>
+<td>dav1d</td>
+<td><strong>PASS</strong> (fixed 227b1a6 + caa7c5d)</td>
+<td>First meson package tried; hit <code>ar --version</code> probe crash, then a meson compiler-flag-probe misclassification. Both fixed upstream.</td>
+</tr>
+<tr>
+<td>brotli</td>
+<td><strong>PASS</strong> (fixed 97a987d + 2cb6b4d)</td>
+<td>cmake-source-path bug, then <code>__structuredAttrs = true</code> silently defeating the placeholder-output override. Both fixed upstream.</td>
+</tr>
+<tr>
+<td>re2 (~51 TUs, cmake+ninja)</td>
+<td><strong>PASS</strong> (fixed 97a987d + 0d233d3)</td>
+<td>Same cmake-source-path bug as tinycbor/zstd/brotli (cmake+ninja vs cmake+make was never the distinguishing factor), then a cmake+ninja-specific variant of the install-time regeneration bug. Both fixed upstream.</td>
+</tr>
+<tr>
+<td>libssh</td>
+<td><strong>PASS</strong> (fixed 97a987d + e5f9a61 + bb1c077, 1 workaround)</td>
+<td>cmake-source-path bug, linker version-script never staged (worked around via <code>-DWITH_SYMBOL_VERSIONING=OFF</code>), then a placeholder path baked into a copied cmake file.</td>
+</tr>
+<tr>
+<td>protobuf</td>
+<td><strong>PASS</strong> (2 workarounds)</td>
+<td>Self-exec of freshly-linked <code>protoc</code> hits the permanent exec-bit limitation (worked around: <code>-Dprotobuf_BUILD_TESTS=FALSE</code>); also hit libssh's version-script bug (worked around: <code>-Dprotobuf_HAVE_LD_VERSION_SCRIPT=FALSE</code>).</td>
+</tr>
+<tr>
+<td>x265 (~99 TUs)</td>
+<td><strong>PASS</strong> (fixed 28af81d, 1 workaround)</td>
+<td><code>ar</code>/<code>ranlib</code> missing <code>inputs.drvs</code> (fixed), then a bare <code>-lx265-10</code>/<code>-lx265-12</code> link arg no resolution machinery can follow (worked around: <code>multibitdepthSupport = false</code>, drops HDR support -- still open at the dyn-drvs level, see <code>docs/showcase-remaining-open-findings.md</code> in dyn-drvs).</td>
+</tr>
+<tr>
+<td>leveldb</td>
+<td><strong>PASS</strong> (fixed 97a987d + 0d233d3 + 1347c8c)</td>
+<td>cmake-source-path bug, install-time cmake error, <code>postInstall</code> running before output restore. All fixed upstream.</td>
+</tr>
+<tr>
+<td>x264</td>
+<td><strong>PASS</strong> (2 workarounds)</td>
+<td><code>gcc-ranlib --version</code> LTO probe misclassified (postPatch skips it); single-output phase 1 loses real <code>$lib</code> content on restore (preFixup moves it manually).</td>
+</tr>
+<tr>
+<td>libwebp (~171 TUs)</td>
+<td><strong>PASS</strong> (fixed 97a987d + 28af81d + dc07a0a)</td>
+<td>Three sequential bugs: cmake-source-path, <code>ar</code> missing inputs, <code>-Wl,</code>-glued link.d path. All fixed upstream.</td>
+</tr>
+<tr>
+<td>openjpeg</td>
+<td><strong>PASS</strong> (fixed 28af81d)</td>
+<td><code>ar</code>/<code>ranlib</code> never declared their own <code>.o</code> inputs as <code>inputs.drvs</code>.</td>
+</tr>
+<tr>
+<td>capnproto</td>
+<td><strong>PASS</strong> (fixed 0d233d3)</td>
+<td>Install-time cmake+make out-of-tree failure; also required <code>clangStdenv</code> (GCC ICEs on this package's C++20).</td>
+</tr>
+<tr>
+<td>gperf (~20 TUs, autotools)</td>
+<td><strong>PASS</strong> (fixed 9dc8037)</td>
+<td>Automake's <code>-MF .deps/$*.Tpo</code> depfile side-output never round-tripped out of the per-TU sandbox, so the following <code>mv</code> always failed. Fixed upstream by touching an empty depfile at defer time (content is irrelevant -- Nix always rebuilds from scratch).</td>
+</tr>
+<tr>
+<td>libpng, libtasn1</td>
+<td><strong>BLOCKED</strong> (1 bug fixed, 1 new bug found)</td>
+<td>Both set <code>outputBin = "dev"</code> explicitly; <code>phases.split</code>'s forced single-output setup didn't clear that, crashing before any compile ran -- fixed upstream (0a8b174). With that fixed, every real compile succeeds, but the next link step (referencing libtool's plain, unversioned <code>.so</code> symlink rather than the real versioned <code>.so.N.N.N</code> file that's actually tracked) fails: <code>ld.bfd: cannot find ./.libs/libpng16.so</code>. New, still-open bug -- see <code>docs/libtool-so-symlink-bug.md</code> in dyn-drvs.</td>
+</tr>
+<tr>
+<td>tinycbor, zstd</td>
+<td><strong>BLOCKED</strong></td>
+<td>This flake's pinned nixpkgs builds both via cmake, hitting the still-open cmake-source-path bug (<code>cc1: fatal error: /build/source/&lt;file&gt;: No such file or directory</code>).</td>
+</tr>
+<tr>
+<td>mosh</td>
+<td><strong>BLOCKED</strong></td>
+<td><code>autoreconfHook</code> phase-injection bug fixed (8aa6b86), but <code>postInstall</code>'s <code>wrapProgram</code> now runs before <code>phases.split</code> restores <code>$out</code> -- new, still-open bug.</td>
+</tr>
+<tr>
+<td>openssl</td>
+<td><strong>NO-GO at eval time</strong></td>
+<td><code>mkAcceleratedStdenv</code> doesn't provide <code>finalAttrs.finalPackage</code>, which openssl's recipe reads. Never reached the interesting <code>-DOPENSSLDIR=</code> risk.</td>
+</tr>
+</tbody>
+</table>
+<p>16 distinct bugs found beyond dyn-drvs' own freetype proof point; 12 fixed upstream during this survey, 4 remain open (mosh's restore-ordering bug, the cmake-source-path bug on tinycbor/zstd/xxHash, x265's bare <code>-l&lt;name&gt;</code> link arg, libpng/libtasn1's libtool <code>.so</code>-symlink gap). Full repro/root-cause/fix detail for each is in the relevant <code>nix/packages/*.nix</code> header -- not duplicated here.</p>
+<h3 id="wider-package-survey-not-wired-into-flake-outputs">Wider package survey (not wired into flake outputs)</h3>
+<p>A follow-up sweep against more nixpkgs packages, beyond what's wired into this flake, for breadth of evidence:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>xxHash</td>
+<td>FAIL -- cmake-source-path bug (same as tinycbor/zstd above).</td>
+</tr>
+<tr>
+<td>libb64</td>
+<td>FAIL -- exec-bit limitation (same class as protobuf), on a plain Makefile self-test. <strong>Contrast</strong>: nixgg's two-phase split PASSES on this exact package -- see the nixgg-mechanism table above (<code>libb64-nixgg</code>).</td>
+</tr>
+<tr>
+<td>mpfr</td>
+<td>FAIL -- confirms the discoverTree link-step gap (bug #3, same shape as pcre2).</td>
+</tr>
+</tbody>
+</table>
+<p>Every package tried outside the four hand-written-Makefile passes (giflib/tree/figlet/nnn) hit an autotools- or cmake-shaped bug -- the autotools depcomp idiom and cmake's generated build systems are both landmines for <code>mkAcceleratedStdenv</code> as currently implemented.</p>
+<h3 id="nix-ninja-mechanism-mkmesonpackage">nix-ninja mechanism (<code>mkMesonPackage</code>)</h3>
+<p><code>nixninja-argp</code> (meson, 7 C files) builds a real <code>libargp.a</code> (verified via <code>ar t</code> listing all 7 real <code>.o</code> TUs) when it succeeds, but fails intermittently in CI against the real <code>/nix/store</code>: ninja's own generated install rule appears to write to a literal placeholder path (<code>PermissionError: [Errno 13] Permission denied: '/nonexistent'</code>), not yet root-caused. Not reproduced locally against the redirected alt-store; marked informational/non-blocking in <code>ci.yml</code>.</p>
+<h3 id="drowse-mechanism-callpackage">drowse mechanism (<code>callPackage</code>)</h3>
+<p><code>drowse-hello</code> builds a real, runnable <code>bin/hello</code> using drowse's own tested example (<code>tests/hello.nix</code>) verbatim. Demonstrates "avoid IFD" rather than fine-grained per-TU caching, distinct from the other three mechanisms.</p>
+<h3 id="the-break-even-lesson">The break-even lesson</h3>
+<p>Per-TU acceleration pays off only when per-unit compile cost is high enough to amortize the registration tax (~80ms/derivation for <code>nix derivation add</code>, per dyn-drvs' <code>registration-overhead.sh</code>). A 30-file synthetic library with real per-file compile weight shows a 2.90x win; the same mechanism against freetype's small, fast-compiling TUs shows a ~6.7x loss (measured directly here, cold build). Both TU count and per-unit compile cost matter -- wins and losses don't generalize by mechanism alone.</p>
+<h3 id="how-to-reproduce">How to reproduce</h3>
+<pre class="console"><code>$ ./benchmarks/patch-rebuild.sh packages.x86_64-linux.dyndrv-openssl-baseline \
+    packages.x86_64-linux.dyndrv-openssl</code></pre>
+<p>See <code>benchmarks/patch-rebuild.sh</code>'s header for usage, and <code>try-it-out/run-nix.sh</code> for how the <code>builder-rpc-v0</code>-capable Nix gets bootstrapped.</p>
 
-<h2>Run it yourself</h2>
-<pre><code>./try-it-out/run-nix.sh build --impure --no-link --print-out-paths .#dyndrv-freetype
-./try-it-out/run-nixgg.sh build --impure --no-link --print-out-paths .#nixgg-lua-batch</code></pre>
-
-<p class="muted">Hand-maintained; see <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">RESULTS.md</a> for the always-current, CI-verified detail.</p>
+<p class="muted">Generated by <code>benchmarks/render-index.sh</code> from
+<code>benchmarks/RESULTS.md</code> on every push to <code>main</code> --
+never hand-edited.</p>
 
 </body>
 </html>
