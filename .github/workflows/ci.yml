@@ -51,6 +51,28 @@ jobs:
       - name: Verify run-nix-ci.sh can fetch+build a working Nix
         run: ./try-it-out/run-nix-ci.sh --version
 
+      # Catches a broken/typo'd package definition even if it isn't
+      # named in any of the explicit for-loops below -- e.g. this
+      # session's own stale zstd `target` param (pre-multi-target API)
+      # would have failed here immediately instead of only surfacing
+      # when someone happened to build .#zstd by hand. nixninja-argp is
+      # the one pre-existing, known-broken flake output (nix-ninja's
+      # own flake pins a nixpkgs revision predating `builtins.outputOf`,
+      # unrelated to anything in this repo) -- exits nonzero on its own,
+      # so this step only fails if MORE than that one output errors.
+      - name: nix flake check (all packages evaluate)
+        run: |
+          set +e
+          nix flake check --no-write-lock-file --no-build 2>&1 | tee /tmp/flake-check.log
+          set -e
+          failed=$(grep -c '^❌' /tmp/flake-check.log || true)
+          unexpected=$(grep '^❌' /tmp/flake-check.log | grep -v 'nixninja-argp$' || true)
+          echo "failed outputs: $failed (expect at most 1: nixninja-argp)"
+          if [[ "$failed" -gt 1 ]] || [[ -n "$unexpected" ]]; then
+            echo "::error::nix flake check found unexpected failures beyond the known nixninja-argp gap -- see log above"
+            exit 1
+          fi
+
       # Tier 0 (freetype, giflib, tree, figlet, nnn, gperf) are the
       # dyn-drvs packages that build clean end to end
       # (benchmarks/RESULTS.md); hard gate here. zstd/mosh/openssl/
@@ -191,13 +213,13 @@ jobs:
             echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
             exit 0
           fi
-          for attr in openssl hello mosh; do
+          for attr in openssl hello mosh zstd nixgg-lua nixgg-lua-batch libb64-nixgg; do
             OUT=$(./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done
           OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
           echo "$OUT" | cachix push "$CACHIX_CACHE"
-          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn nixninja-argp drowse-hello; do
+          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf nixninja-argp drowse-hello; do
             OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done

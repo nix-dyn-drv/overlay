@@ -49,24 +49,24 @@ jobs:
 
       # Same hard gate as ci.yml: the proven tier must still build clean
       # against the new pin, or this bump doesn't merge automatically.
-      - name: Build proven dyndrv packages against new nixpkgs (freetype, giflib, tree, figlet, nnn)
+      - name: Build proven dyndrv packages against new nixpkgs (freetype, giflib, tree, figlet, nnn, gperf)
         if: steps.before.outputs.rev != steps.after.outputs.rev
         id: proven
         continue-on-error: true
         run: |
-          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/$attr.log"
             echo "::endgroup::"
           done
 
-      - name: Build nixgg-mechanism packages against new nixpkgs (openssl, hello, mosh, zstd)
+      - name: Build nixgg-mechanism packages against new nixpkgs (openssl, hello, mosh, zstd, lua, libb64)
         if: steps.before.outputs.rev != steps.after.outputs.rev
         id: nixgg
         continue-on-error: true
         run: |
-          for attr in openssl hello mosh zstd; do
+          for attr in openssl hello mosh zstd nixgg-lua nixgg-lua-batch libb64-nixgg; do
             echo "::group::Building .#$attr"
             ./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths -Lv \
               ".#$attr" 2>&1 | tee "/tmp/nixgg-$attr.log"
@@ -114,8 +114,8 @@ jobs:
           {
             echo "### nixpkgs bump: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }}"
             echo ""
-            echo "Proven tier (freetype, giflib, tree, figlet, nnn): ${{ steps.proven.outcome }}"
-            echo "nixgg tier (openssl, hello, mosh, zstd): ${{ steps.nixgg.outcome }}"
+            echo "Proven tier (freetype, giflib, tree, figlet, nnn, gperf): ${{ steps.proven.outcome }}"
+            echo "nixgg tier (openssl, hello, mosh, zstd, lua, libb64): ${{ steps.nixgg.outcome }}"
             echo "nix-ninja/drowse tier (argp-standalone, hello): ${{ steps.other-mechanisms.outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -135,9 +135,10 @@ jobs:
           git commit -m "nixpkgs: ${{ steps.before.outputs.rev }} -> ${{ steps.after.outputs.rev }}
 
           Auto-bumped by .github/workflows/nixpkgs-update.yml -- proven
-          (freetype, giflib, tree, figlet, nnn), nixgg (openssl, hello,
-          mosh, zstd), and nix-ninja/drowse (argp-standalone, hello)
-          tiers all rebuilt clean against the new pin."
+          (freetype, giflib, tree, figlet, nnn, gperf), nixgg (openssl,
+          hello, mosh, zstd, lua, libb64), and nix-ninja/drowse
+          (argp-standalone, hello) tiers all rebuilt clean against the
+          new pin."
           git push origin HEAD:main
 
       # Red: something broke against the new nixpkgs. Don't push straight
@@ -157,8 +158,8 @@ jobs:
           body: |
             Automatic nixpkgs bump found a regression against the new pin.
 
-            - Proven tier (freetype, giflib, tree, figlet, nnn): `${{ steps.proven.outcome }}`
-            - nixgg tier (openssl, hello, mosh, zstd): `${{ steps.nixgg.outcome }}`
+            - Proven tier (freetype, giflib, tree, figlet, nnn, gperf): `${{ steps.proven.outcome }}`
+            - nixgg tier (openssl, hello, mosh, zstd, lua, libb64): `${{ steps.nixgg.outcome }}`
             - nix-ninja/drowse tier (argp-standalone, hello): `${{ steps.other-mechanisms.outcome }}`
 
             See the workflow run's step summary and job logs for details.
@@ -173,7 +174,11 @@ jobs:
             echo "No CACHIX_AUTH_TOKEN secret configured -- skipping push."
             exit 0
           fi
-          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn nixninja-argp drowse-hello; do
+          for attr in dyndrv-freetype dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf nixninja-argp drowse-hello; do
             OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
+            [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
+          done
+          for attr in openssl hello mosh zstd nixgg-lua nixgg-lua-batch libb64-nixgg; do
+            OUT=$(./try-it-out/run-nixgg-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done
