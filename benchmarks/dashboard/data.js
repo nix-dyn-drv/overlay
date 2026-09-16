@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789512908266,
+  "lastUpdate": 1789563871464,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -1014,6 +1014,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.58,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b81bc78696be8ef8acf77a05ede3080160aa5b7e",
+          "message": "Merge pull request #23 from nix-dyn-drv/auto-render-gh-pages-index\n\nAuto-render gh-pages index.html from RESULTS.md instead of hand-editing it",
+          "timestamp": "2026-09-16T08:46:28-04:00",
+          "tree_id": "d7e64f655cf998c4b35bc9d1aa16bfb78ba53671",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/b81bc78696be8ef8acf77a05ede3080160aa5b7e"
+        },
+        "date": 1789563870890,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.6,
             "unit": "x"
           }
         ]
