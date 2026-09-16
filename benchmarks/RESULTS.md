@@ -42,7 +42,7 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | re2 (~51 TUs, cmake+ninja) | **PASS** (fixed 97a987d + 0d233d3) | Same cmake-source-path bug as tinycbor/zstd/brotli (cmake+ninja vs cmake+make was never the distinguishing factor), then a cmake+ninja-specific variant of the install-time regeneration bug. Both fixed upstream. |
 | libssh | **PASS** (fixed 97a987d + e5f9a61 + bb1c077, 1 workaround) | cmake-source-path bug, linker version-script never staged (worked around via `-DWITH_SYMBOL_VERSIONING=OFF`), then a placeholder path baked into a copied cmake file. |
 | protobuf | **PASS** (2 workarounds) | Self-exec of freshly-linked `protoc` hits the permanent exec-bit limitation (worked around: `-Dprotobuf_BUILD_TESTS=FALSE`); also hit libssh's version-script bug (worked around: `-Dprotobuf_HAVE_LD_VERSION_SCRIPT=FALSE`). |
-| x265 (~99 TUs) | **PASS** (fixed 28af81d, 1 workaround) | `ar`/`ranlib` missing `inputs.drvs` (fixed), then a bare `-lx265-10`/`-lx265-12` link arg no resolution machinery can follow (worked around: `multibitdepthSupport = false`, drops HDR support -- still open at the dyn-drvs level, see `docs/showcase-remaining-open-findings.md` in dyn-drvs). |
+| x265 (~99 TUs) | **PASS** (fixed 28af81d + task #149 + task #150, 1 workaround) | Four sequential bugs: `ar`/`ranlib` missing `inputs.drvs` (fixed), a bare `-lx265-10`/`-lx265-12` link arg (fixed, task #149), the sibling `build-10bits`/`build-12bits` cmake trees' own stubs never discovered at all (fixed, task #150). With all three fixed, full `multibitdepthSupport` (10/12-bit HDR) now builds -- `multibitdepthSupport = false` is no longer needed. Remaining workaround: a `preConfigure` override that reconstructs real bash arrays for `cmakeFlags`/`cmakeStaticLibFlags`, since `phases.split`'s forced `__structuredAttrs = false` silently flattens them into space-joined strings, which x265's own `"${cmakeStaticLibFlags[@]}"` usage then mis-expands as one argument -- a structural conflict, not a dyn-drvs bug (see `nix/packages/x265.nix`'s own header for the full analysis). |
 | leveldb | **PASS** (fixed 97a987d + 0d233d3 + 1347c8c) | cmake-source-path bug, install-time cmake error, `postInstall` running before output restore. All fixed upstream. |
 | x264 | **PASS** (2 workarounds) | `gcc-ranlib --version` LTO probe misclassified (postPatch skips it); single-output phase 1 loses real `$lib` content on restore (preFixup moves it manually). |
 | libwebp (~171 TUs) | **PASS** (fixed 97a987d + 28af81d + dc07a0a) | Three sequential bugs: cmake-source-path, `ar` missing inputs, `-Wl,`-glued link.d path. All fixed upstream. |
@@ -54,12 +54,11 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
 | mosh | **BLOCKED** | `autoreconfHook` phase-injection bug fixed (8aa6b86), but `postInstall`'s `wrapProgram` now runs before `phases.split` restores `$out` -- new, still-open bug. |
 | openssl | **NO-GO at eval time** | `mkAcceleratedStdenv` doesn't provide `finalAttrs.finalPackage`, which openssl's recipe reads. Never reached the interesting `-DOPENSSLDIR=` risk. |
 
-16 distinct bugs found beyond dyn-drvs' own freetype proof point; 12 fixed
-upstream during this survey, 4 remain open (mosh's restore-ordering bug,
-the cmake-source-path bug on tinycbor/zstd/xxHash, x265's bare
-`-l<name>` link arg, libpng/libtasn1's libtool `.so`-symlink gap). Full
-repro/root-cause/fix detail for each is in the relevant
-`nix/packages/*.nix` header -- not duplicated here.
+17 distinct bugs found beyond dyn-drvs' own freetype proof point; 14 fixed
+upstream during this survey, 3 remain open (mosh's restore-ordering bug,
+the cmake-source-path bug on tinycbor/zstd/xxHash, libpng/libtasn1's
+libtool `.so`-symlink gap). Full repro/root-cause/fix detail for each is
+in the relevant `nix/packages/*.nix` header -- not duplicated here.
 
 ## Wider package survey (not wired into flake outputs)
 
