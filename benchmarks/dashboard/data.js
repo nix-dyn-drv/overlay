@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789563871464,
+  "lastUpdate": 1789564011197,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -1043,6 +1043,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.6,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cbbe6af8c9d521b0d3500852aeda4631b4f2a097",
+          "message": "Merge pull request #24 from nix-dyn-drv/ci-gaps-fix\n\nClose CI regression-detection gaps: flake check gate + missing packages in gates/pushes",
+          "timestamp": "2026-09-16T08:48:31-04:00",
+          "tree_id": "e45125815eed59001ad107ac6b19b5c108cc70ed",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/cbbe6af8c9d521b0d3500852aeda4631b4f2a097"
+        },
+        "date": 1789564010130,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.65,
             "unit": "x"
           }
         ]
