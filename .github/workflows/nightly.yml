@@ -94,10 +94,10 @@ jobs:
             ./benchmarks/patch-rebuild.sh \
               packages.x86_64-linux.dyndrv-freetype-baseline packages.x86_64-linux.dyndrv-freetype
 
-      - name: "Blocked tiers re-check (informational, non-blocking): zstd, mosh"
+      - name: "Blocked tiers re-check (informational, non-blocking): zstd, mosh, tinycbor, libpng, libtasn1"
         continue-on-error: true
         run: |
-          for attr in dyndrv-zstd dyndrv-mosh; do
+          for attr in dyndrv-zstd dyndrv-mosh dyndrv-tinycbor dyndrv-libpng dyndrv-libtasn1; do
             echo "::group::Re-checking .#$attr (documented blocked, see nix/packages/$attr.nix)"
             if RUN_NIX=./try-it-out/run-nix-ci.sh \
                 ./benchmarks/patch-rebuild.sh "packages.x86_64-linux.$attr" "packages.x86_64-linux.$attr" \
