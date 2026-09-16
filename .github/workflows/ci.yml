@@ -162,6 +162,33 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
 
+      # Third view: the actual gh-pages landing page (index.html),
+      # rendered from benchmarks/RESULTS.md via pandoc instead of
+      # hand-edited -- the page drifted for weeks under the old
+      # hand-maintained version (see benchmarks/render-index.sh's own
+      # header for why). Runs even if the benchmark-action step above
+      # already pushed a commit to gh-pages; this step fetches fresh
+      # before amending its own file, so it never conflicts.
+      - name: Render and publish gh-pages landing page
+        if: github.event_name == 'push'
+        run: |
+          PANDOC=$(nix build nixpkgs#pandoc --no-link --print-out-paths)
+          PATH="$PANDOC/bin:$PATH" ./benchmarks/render-index.sh > /tmp/index.html
+
+          git fetch origin gh-pages
+          git worktree add /tmp/gh-pages-publish origin/gh-pages
+          cp /tmp/index.html /tmp/gh-pages-publish/index.html
+          cd /tmp/gh-pages-publish
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- index.html; then
+            echo "index.html unchanged, nothing to push"
+          else
+            git add index.html
+            git commit -m "Render index.html from benchmarks/RESULTS.md for ${{ github.sha }}"
+            git push origin HEAD:gh-pages
+          fi
+
       # Informational: won't fail the job, just flags when a dyn-drvs fix lands.
       - name: "Blocked tiers (informational, non-blocking): zstd, mosh, tinycbor, libpng, libtasn1"
         continue-on-error: true
