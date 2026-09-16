@@ -35,7 +35,9 @@
 <h2>The headline number</h2>
 <p>
   <a href="https://github.com/tomberek/nixgg">nixgg</a>'s mechanism rebuilds only
-  <strong>2 of openssl's 2213 translation units</strong> on a one-line patch.
+  <strong>2 of openssl's 2213 translation units</strong> on a one-line patch, and its
+  <code>batchGroups</code> feature collapses lua's ~30 per-TU compiles into 1
+  archive derivation for a <strong>1.71x</strong> build-phase win.
   <a href="https://github.com/tomberek/dyn-drvs">dyn-drvs</a>' mechanism builds clean
   on freetype, giflib, tree, figlet, and nnn, but freetype's cold build is
   <strong>~6.7x slower</strong> than a plain rebuild (measured directly in this repo).
@@ -51,35 +53,43 @@
   <tr><th>Package</th><th>Mechanism</th><th>Status</th><th>Notes</th></tr>
   <tr><td>openssl</td><td>nixgg</td><td class="win">win</td><td>2/2213 TUs rebuilt on a one-line patch</td></tr>
   <tr><td>hello, mosh, zstd</td><td>nixgg</td><td class="win">works</td><td>build cleanly end to end</td></tr>
+  <tr><td>lua</td><td>nixgg</td><td class="win">win</td><td><code>batchGroups</code> collapses 34 &rarr; 2 derivations, 1.71x on the build phase</td></tr>
+  <tr><td>libb64</td><td>nixgg</td><td class="win">win</td><td>two-phase split self-execs a just-linked binary — dyn-drvs can't do this on the same package (see below)</td></tr>
   <tr><td>freetype</td><td>dyn-drvs</td><td class="loss">loss</td><td>~6.7x slower — too little per-TU compile cost</td></tr>
   <tr><td>giflib, tree, figlet, nnn</td><td>dyn-drvs</td><td class="win">works</td><td>plain hand-written Makefile, no configure/cmake</td></tr>
-  <tr><td>zstd, tinycbor</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>cmake-driven builds hit discoverTree bugs (link-step / source-path)</td></tr>
-  <tr><td>mosh</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>autoreconfHook</code>'s phase gets dropped</td></tr>
+  <tr><td>dav1d, brotli, re2, libssh, protobuf, x265, leveldb, x264, libwebp, openjpeg, capnproto, gperf</td><td>dyn-drvs</td><td class="win">works</td><td>each hit 1-3 distinct bugs, all now fixed or worked around — see RESULTS.md</td></tr>
+  <tr><td>libpng, libtasn1</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>a real bug fixed (<code>outputBin</code> override), but a new one found: libtool's unversioned <code>.so</code> symlink is never resolved</td></tr>
+  <tr><td>zstd, tinycbor, xxHash</td><td>dyn-drvs</td><td class="blocked">blocked</td><td>cmake-driven builds hit discoverTree's cmake-source-path bug</td></tr>
+  <tr><td>mosh</td><td>dyn-drvs</td><td class="blocked">blocked</td><td><code>postInstall</code> now runs before the placeholder tree gets restored to <code>$out</code></td></tr>
   <tr><td>openssl</td><td>dyn-drvs</td><td class="blocked">no-go</td><td>missing <code>finalAttrs.finalPackage</code></td></tr>
 </table>
 <p class="muted">Full detail, exact errors, and root causes: <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">RESULTS.md</a>.</p>
 
 <h2>Bugs found in dyn-drvs</h2>
 <p>
-  Building and surveying more real nixpkgs packages against this repo surfaced
-  nine distinct bugs in <code>accelerate.mkAcceleratedStdenv</code>, each written
-  up for upstream:
+  Building and surveying real nixpkgs packages against this repo surfaced
+  16 distinct bugs in <code>accelerate.mkAcceleratedStdenv</code>, 12 fixed
+  upstream so far, each written up for the dyn-drvs maintainer:
 </p>
 <ul>
   <li><code>discoverTree</code>'s dependency scan can't see a link step's own inputs when the link is driven through <code>cc</code>/<code>c++</code> directly (cmake, libtool) — confirmed on zstd, pcre2, mpfr; not universal (tinycbor's own <code>cc</code>-driven links build fine).</li>
   <li><code>autoreconfHook</code>'s dynamically-injected build phase gets silently dropped by a static phase list.</li>
   <li>CMake's compiler-flag probes aren't recognized as passthrough-eligible, so a deferred stub falsely reports success.</li>
   <li>The <code>finalAttrs.finalPackage</code> self-reference nixpkgs injects for ordinary packages is missing from the accelerated stdenv's own <code>mkDerivation</code>.</li>
-  <li>cmake builds can fail per-TU compiles with a source-not-found error — confirmed on xxHash, re2, and tinycbor's real (cmake-based) recipe.</li>
-  <li>A freshly-linked binary can lose its execute bit, breaking any Makefile that runs its own just-built binary as a self-test (libb64).</li>
-  <li><code>phases.split</code> forces single-output but doesn't clear an inherited <code>outputBin</code>/<code>outputMan</code> literal override (libpng, libtasn1).</li>
-  <li>Secondary compiler side-outputs (automake's <code>-MF</code> depfiles) don't survive the sandbox boundary, breaking the classic autotools depcomp idiom (gperf).</li>
+  <li>cmake builds can fail per-TU compiles with a source-not-found error — confirmed on xxHash, re2 (fixed), and tinycbor's real (cmake-based) recipe.</li>
+  <li>A freshly-linked binary can lose its execute bit, breaking any Makefile that runs its own just-built binary as a self-test (libb64) — a permanent architectural limitation, not fixable within dyn-drvs' single-buildPhase design. nixgg's two-phase pattern sidesteps the same wall on the same package.</li>
+  <li><code>phases.split</code> forces single-output but doesn't clear an inherited <code>outputBin</code>/<code>outputMan</code> literal override (libpng, libtasn1) — fixed.</li>
+  <li>Secondary compiler side-outputs (automake's <code>-MF</code> depfiles) don't survive the sandbox boundary, breaking the classic autotools depcomp idiom (gperf) — fixed.</li>
+  <li>A bare <code>-l&lt;name&gt;</code> link argument (a linker search-path reference, not a literal path) is never resolved back to its producing derivation (x265's 10/12-bit HDR variants).</li>
+  <li>A libtool-generated unversioned <code>.so</code> symlink is never registered as an alias for the real, versioned file dyn-drvs actually tracks — the next link step referencing it fails (libpng, libtasn1).</li>
+  <li><code>postInstall</code> can run before the placeholder-rooted build tree gets restored into the real <code>$out</code>, so it reads a directory that doesn't exist yet (mosh).</li>
 </ul>
 
 <h2>Run it yourself</h2>
-<pre><code>./try-it-out/run-nix.sh build --impure --no-link --print-out-paths .#dyndrv-freetype</code></pre>
+<pre><code>./try-it-out/run-nix.sh build --impure --no-link --print-out-paths .#dyndrv-freetype
+./try-it-out/run-nixgg.sh build --impure --no-link --print-out-paths .#nixgg-lua-batch</code></pre>
 
-<p class="muted">Updated automatically by CI on every push to <code>main</code>.</p>
+<p class="muted">Hand-maintained; see <a href="https://github.com/nix-dyn-drv/overlay/blob/main/benchmarks/RESULTS.md">RESULTS.md</a> for the always-current, CI-verified detail.</p>
 
 </body>
 </html>
