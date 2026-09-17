@@ -5,7 +5,7 @@ losses are reported alongside wins. Full bug narratives (repro, root
 cause, fix commit) live in each package's `nix/packages/*.nix` header,
 not duplicated here.
 
-Four mechanisms compared, all implementing the same underlying Nix
+Five mechanisms compared, all implementing the same underlying Nix
 feature (`builtins.outputOf`, dynamic derivations) independently:
 
 - **nixgg's `splitStdenv`** -- Go-based shim, proven at nixpkgs scale
@@ -20,6 +20,9 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
   into a nested `nix-instantiate` (via `recursive-nix`), not a per-TU
   *build* split (`drowse-hello` output). The "avoid IFD" half of the
   dynamic-derivations story.
+- **cargo-dyndrv's `buildDynamicCrate`** -- per-crate dynamic
+  derivations for Rust (`hyperfine-cargo-dyndrv` output). The first
+  mechanism in this survey targeting a language other than C/C++.
 
 ## nixgg mechanism (`splitStdenv`)
 
@@ -93,6 +96,22 @@ marked informational/non-blocking in `ci.yml`.
 tested example (`tests/hello.nix`) verbatim. Demonstrates "avoid IFD"
 rather than fine-grained per-TU caching, distinct from the other three
 mechanisms.
+
+## cargo-dyndrv mechanism (per-crate dynamic derivations for Rust)
+
+Fifth independent mechanism in this survey, and the first targeting a
+language other than C/C++: [cargo-dyndrv](https://github.com/obsidiansystems/cargo-dyndrv)
+turns Cargo's own unit graph into one dynamic derivation per crate
+(the direct Rust equivalent of nixgg/dyn-drvs' per-translation-unit
+splitting, since Cargo's compilation unit is the crate, not the file).
+Same `builtins.outputOf`/`builder-rpc-v0` primitive as the other four
+mechanisms; confirmed working via this repo's own `try-it-out/run-nix.sh`
+bootstrap with no modification needed.
+
+| Package | Result | Notes |
+|---|---|---|
+| cargo-dyndrv (self-build, ~50 crates) | **PASS** | `cargo-dyndrv-dyn` builds itself via its own mechanism, real per-crate dynamic derivations, genuine ELF binary confirmed. |
+| hyperfine (~173 crates, real nixpkgs package) | **BLOCKED** | Picked for a clean first attempt: zero external C buildInputs (no pkg-config/extern.json wiring, unlike e.g. ripgrep's `pcre2` dependency), plain filesystem-only `build.rs`. Blocked anyway: compiling `portable-atomic`'s own build script (a transitive dependency via `indicatif`, hyperfine's ordinary, non-optional progress-bar library) fails with `environment variable 'CARGO_PKG_NAME' not defined at compile time` -- root-caused directly in cargo-dyndrv's own source (`add_metadata_env` in `cargo-dyndrv/src/main.rs`): it populates `CARGO_PKG_VERSION` and its `MAJOR`/`MINOR`/`PATCH`/`PRE` components for a build-script invocation, but not `CARGO_PKG_NAME` -- the function's own trailing comment, `// TODO: more of these`, is an acknowledged, not-yet-filled gap. No package-level workaround: `portable-atomic` is a transitive, non-optional dependency, and `env!("CARGO_PKG_NAME")` is a common, standard idiom in real `build.rs` scripts -- likely blocks a large fraction of real-world crate graphs, not just this one package. Details in `nix/packages/hyperfine-cargo-dyndrv.nix`.
 
 ## The break-even lesson
 

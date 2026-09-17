@@ -89,6 +89,23 @@ jobs:
             echo "::endgroup::"
           done
 
+      # cargo-dyndrv mechanism: fifth independent implementation of the
+      # same builtins.outputOf/builder-rpc-v0 primitive, per-crate
+      # dynamic derivations for Rust. cargo-dyndrv-dyn (the tool
+      # building itself) is a hard gate, a genuine pass; hyperfine is a
+      # documented BLOCKED finding (nix/packages/hyperfine-cargo-dyndrv.nix)
+      # so it runs informationally instead.
+      - name: Build cargo-dyndrv-dyn (tool building itself, ~50 crates)
+        run: |
+          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+            .#cargo-dyndrv-dyn 2>&1 | tee /tmp/cargo-dyndrv-dyn.log
+
+      - name: "Attempt hyperfine via cargo-dyndrv (informational, non-blocking, documented BLOCKED)"
+        continue-on-error: true
+        run: |
+          ./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths -Lv \
+            .#hyperfine-cargo-dyndrv 2>&1 | tee /tmp/hyperfine-cargo-dyndrv.log || true
+
       # nix-ninja (mkMesonPackage) and drowse (callPackage) are two more
       # independent dynamic-derivations mechanisms, same patched-Nix path
       # as the dyn-drvs tier above. nix-ninja intermittently hits a
@@ -246,7 +263,7 @@ jobs:
           done
           OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths .#dyndrv-freetype)
           echo "$OUT" | cachix push "$CACHIX_CACHE"
-          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf nixninja-argp drowse-hello; do
+          for attr in dyndrv-giflib dyndrv-tree dyndrv-figlet dyndrv-nnn dyndrv-gperf cargo-dyndrv-dyn nixninja-argp drowse-hello; do
             OUT=$(./try-it-out/run-nix-ci.sh build --impure --no-link --print-out-paths ".#$attr" || true)
             [[ -n "$OUT" ]] && echo "$OUT" | cachix push "$CACHIX_CACHE"
           done
