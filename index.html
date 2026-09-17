@@ -137,8 +137,8 @@
 </tr>
 <tr>
 <td>x265 (~99 TUs)</td>
-<td><strong>PASS</strong> (fixed 28af81d, 1 workaround)</td>
-<td><code>ar</code>/<code>ranlib</code> missing <code>inputs.drvs</code> (fixed), then a bare <code>-lx265-10</code>/<code>-lx265-12</code> link arg no resolution machinery can follow (worked around: <code>multibitdepthSupport = false</code>, drops HDR support -- still open at the dyn-drvs level, see <code>docs/showcase-remaining-open-findings.md</code> in dyn-drvs).</td>
+<td><strong>PASS</strong> (fixed 28af81d + task #149 + task #150, 1 workaround)</td>
+<td>Four sequential bugs: <code>ar</code>/<code>ranlib</code> missing <code>inputs.drvs</code> (fixed), a bare <code>-lx265-10</code>/<code>-lx265-12</code> link arg (fixed, task #149), the sibling <code>build-10bits</code>/<code>build-12bits</code> cmake trees' own stubs never discovered at all (fixed, task #150). With all three fixed, full <code>multibitdepthSupport</code> (10/12-bit HDR) now builds -- <code>multibitdepthSupport = false</code> is no longer needed. Remaining workaround: a <code>preConfigure</code> override that reconstructs real bash arrays for <code>cmakeFlags</code>/<code>cmakeStaticLibFlags</code>, since <code>phases.split</code>'s forced <code>__structuredAttrs = false</code> silently flattens them into space-joined strings, which x265's own <code>"${cmakeStaticLibFlags[@]}"</code> usage then mis-expands as one argument -- a structural conflict, not a dyn-drvs bug (see <code>nix/packages/x265.nix</code>'s own header for the full analysis).</td>
 </tr>
 <tr>
 <td>leveldb</td>
@@ -192,7 +192,7 @@
 </tr>
 </tbody>
 </table>
-<p>16 distinct bugs found beyond dyn-drvs' own freetype proof point; 12 fixed upstream during this survey, 4 remain open (mosh's restore-ordering bug, the cmake-source-path bug on tinycbor/zstd/xxHash, x265's bare <code>-l&lt;name&gt;</code> link arg, libpng/libtasn1's libtool <code>.so</code>-symlink gap). Full repro/root-cause/fix detail for each is in the relevant <code>nix/packages/*.nix</code> header -- not duplicated here.</p>
+<p>17 distinct bugs found beyond dyn-drvs' own freetype proof point; 14 fixed upstream during this survey, 3 remain open (mosh's restore-ordering bug, the cmake-source-path bug on tinycbor/zstd/xxHash, libpng/libtasn1's libtool <code>.so</code>-symlink gap). Full repro/root-cause/fix detail for each is in the relevant <code>nix/packages/*.nix</code> header -- not duplicated here.</p>
 <h3 id="wider-package-survey-not-wired-into-flake-outputs">Wider package survey (not wired into flake outputs)</h3>
 <p>A follow-up sweep against more nixpkgs packages, beyond what's wired into this flake, for breadth of evidence:</p>
 <table>
