@@ -21,6 +21,80 @@ feature (`builtins.outputOf`, dynamic derivations) independently:
   *build* split (`drowse-hello` output). The "avoid IFD" half of the
   dynamic-derivations story.
 
+## Direct head-to-head: nixgg vs. dyn-drvs, same package, same edit
+
+Every other number in this file measures ONE mechanism in isolation
+(against plain `stdenv.mkDerivation`, or against itself
+batched/unbatched) -- nothing before this compared nixgg's own
+`splitStdenv`/`mkNixggBuild` against dyn-drvs' own
+`accelerate.mkAcceleratedStdenv` on the SAME workload. This section is
+that comparison.
+
+**Workload**: real, unmodified Lua 5.4.7 (`https://www.lua.org/ftp/lua-5.4.7.tar.gz`,
+34 real `.c` translation units), built via the IDENTICAL command both
+sides' own fixtures already use (`cd src && make linux CC=cc` --
+nixgg's own `examples/lua/default.nix`), then a one-line comment-only
+edit to `src/lmathlib.c` (nixgg's own `tests/perf-regression.sh`
+fixture, reused verbatim) rebuilt from a warm store.
+
+**Methodology, controlling for confounds found during setup**:
+- `--builders ''` on both sides -- without this, some builds route to
+  a remote builder over SSH, adding large, highly variable network
+  latency (confirmed directly: one run measured 27s with a remote
+  builder in play vs. ~19s local-only for the identical rebuild).
+  Wall-clock numbers below are LOCAL-ONLY.
+- `--option substituters ''` on the timed rebuild only (matching each
+  project's own existing perf test methodology --
+  `tests/perf-regression.sh` for nixgg, `real-package-bench-lib.sh`
+  for dyn-drvs) -- so a cache hit can't quietly substitute a
+  derivation without it actually running, while still allowing the
+  warm-up build beforehand to substitute freely.
+- Each side's own one-time patched-Nix substitution (`nix build
+  .#patched-nix` for nixgg, `try-it-out/patched-nix.nix` for dyn-drvs)
+  and the initial cold `.#lua`-equivalent build are OUTSIDE the timed
+  window -- only the patch-rebuild itself is timed, matching both
+  projects' own existing benchmark conventions.
+- 3-4 independent runs each, fresh alt store per run (a shared store
+  would just substitute the SAME already-built output on repeat runs,
+  timing nothing).
+
+| Mechanism | Run 1 | Run 2 | Run 3 | Run 4 | Mean | Derivations rebuilt |
+|---|---|---|---|---|---|---|
+| nixgg (`mkNixggBuild`) | 7.99s | 8.11s | 8.05s | -- | **8.05s** | 4 (`lua-src-edited`, `nixgg-0`, `nixgg-lua`, `tu-lmathlib.o`) |
+| dyn-drvs (`mkAcceleratedStdenv`) | 19.86s | 30.90s | 21.22s | 18.87s | **22.71s** | 5 (`lua-5.4.7-edited`, `lua-bench.drv.drv`, `dyndrv-src_lmathlib_o`, `lua-bench.drv`, `lua-bench` [replay]) |
+
+**nixgg is ~2.8x faster than dyn-drvs on this identical one-file patch
+rebuild**, and roughly 3-4x more consistent run-to-run (dyn-drvs'
+30.90s outlier vs. its own 18.87s best run is a much wider spread than
+nixgg's tight 7.99-8.11s band).
+
+**Why**: dyn-drvs' `phases.split` architecture (sandboxed
+`builder-rpc-v0` phase 1, THEN an ordinary "replay" phase 2 derivation
+that reruns `installPhase`/`fixupPhase` against phase 1's resolved
+output) registers one MORE derivation per rebuild than nixgg's more
+direct model needs (5 `building '...'` lines vs. nixgg's 4, for an
+otherwise identical single-TU edit) -- confirmed directly by comparing
+each run's own build log. This extra registration round-trip
+(`nix derivation add` + `nix store submit-output`, the same
+per-derivation "tax" `registration-overhead.sh` already measures at
+~80ms/call in isolation, but evidently costing much more than that in
+the full sandboxed-phase-1-then-replay-phase-2 pipeline in practice)
+is architectural, not a bug -- it's the cost of dyn-drvs' two-phase
+split existing at all (see `phases/split.nix`'s own header comment for
+why that split is structurally required: `builder-rpc-v0` cannot
+realize a derivation from inside its own running script, so
+`installPhase`/`fixupPhase` can't run in the same sandboxed derivation
+that ran `buildPhase`).
+
+**Caveat**: this is ONE fixture (lua, 34 small/fast-compiling TUs) on
+ONE machine. Per this file's own "break-even lesson" below, per-TU
+acceleration's wall-clock outcome depends heavily on per-unit compile
+cost vs. registration overhead -- a heavier-per-TU package might narrow
+or reverse this gap; a lighter one would widen it further in nixgg's
+favor. Reproduce via
+`benchmarks/nixgg-vs-dyndrv-lua-bench.sh` (see "How to reproduce"
+below) before drawing conclusions beyond this one workload.
+
 ## nixgg mechanism (`splitStdenv`)
 
 | Package | Scenario | TUs rebuilt | Wall-clock | Notes |
@@ -114,3 +188,13 @@ $ ./benchmarks/patch-rebuild.sh packages.x86_64-linux.dyndrv-openssl-baseline \
 See `benchmarks/patch-rebuild.sh`'s header for usage, and
 `try-it-out/run-nix.sh` for how the `builder-rpc-v0`-capable Nix gets
 bootstrapped.
+
+For the direct nixgg-vs-dyndrv head-to-head above:
+
+```console
+$ DYNDRV_ROOT=~/dyn-drvs NIXGG_ROOT=~/nixgg ./benchmarks/nixgg-vs-dyndrv-lua-bench.sh
+```
+
+See that script's own header for the full methodology (why `--builders
+""`/`--option substituters ""` matter, what's timed vs. excluded as
+one-time setup).
