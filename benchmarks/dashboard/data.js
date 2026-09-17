@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789564011197,
+  "lastUpdate": 1789651077829,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -1072,6 +1072,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.65,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79090516766fe63d18c1c7b93d79e5022235d963",
+          "message": "Merge pull request #25 from nix-dyn-drv/x265-multibitdepth-fix\n\nx265: restore full multibitdepth (10/12-bit HDR) support",
+          "timestamp": "2026-09-17T09:00:06-04:00",
+          "tree_id": "92f8109d73751a3a0c7bcf8a016ab56560635028",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/79090516766fe63d18c1c7b93d79e5022235d963"
+        },
+        "date": 1789651077135,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.59,
             "unit": "x"
           }
         ]
