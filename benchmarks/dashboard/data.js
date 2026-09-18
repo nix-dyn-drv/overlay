@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789651077829,
+  "lastUpdate": 1789754214664,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -1101,6 +1101,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.59,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "db109b9734d5ed915dea1e74c269fcdeeb734060",
+          "message": "Merge pull request #26 from nix-dyn-drv/cargo-dyndrv-hyperfine\n\nAdd cargo-dyndrv: 5th independent dynamic-derivations mechanism, first for Rust",
+          "timestamp": "2026-09-18T13:40:02-04:00",
+          "tree_id": "9d20ac58ef4db6efeb11daaf75a1e94a16a52cfd",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/db109b9734d5ed915dea1e74c269fcdeeb734060"
+        },
+        "date": 1789754213461,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.57,
             "unit": "x"
           }
         ]
