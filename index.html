@@ -34,12 +34,13 @@
 
 <h2 id="benchmark-results">Benchmark results</h2>
 <p>Numbers this repo's README cites. All measured on a specific machine; losses are reported alongside wins. Full bug narratives (repro, root cause, fix commit) live in each package's <code>nix/packages/*.nix</code> header, not duplicated here.</p>
-<p>Four mechanisms compared, all implementing the same underlying Nix feature (<code>builtins.outputOf</code>, dynamic derivations) independently:</p>
+<p>Five mechanisms compared, all implementing the same underlying Nix feature (<code>builtins.outputOf</code>, dynamic derivations) independently:</p>
 <ul>
 <li><strong>nixgg's <code>splitStdenv</code></strong> -- Go-based shim, proven at nixpkgs scale (<code>openssl</code>/<code>openssl-3_5</code>/<code>hello</code>/<code>mosh</code>/<code>zstd</code> outputs).</li>
 <li><strong>dyn-drvs' <code>accelerate.mkAcceleratedStdenv</code></strong> -- Nix-language library (<code>dyndrv-*</code> outputs). See <code>nix/packages/*.nix</code> headers for per-package status.</li>
 <li><strong>nix-ninja's <code>mkMesonPackage</code></strong> -- drop-in <code>ninja</code> replacement (<code>nixninja-argp</code> output), reconstructs a meson build directly rather than overriding an existing package's stdenv.</li>
 <li><strong>drowse's <code>callPackage</code></strong> -- defers a whole package's <em>evaluation</em> into a nested <code>nix-instantiate</code> (via <code>recursive-nix</code>), not a per-TU <em>build</em> split (<code>drowse-hello</code> output). The "avoid IFD" half of the dynamic-derivations story.</li>
+<li><strong>cargo-dyndrv's <code>buildDynamicCrate</code></strong> -- per-crate dynamic derivations for Rust (<code>hyperfine-cargo-dyndrv</code> output). The first mechanism in this survey targeting a language other than C/C++.</li>
 </ul>
 <h3 id="nixgg-mechanism-splitstdenv">nixgg mechanism (<code>splitStdenv</code>)</h3>
 <table>
@@ -222,6 +223,29 @@
 <p><code>nixninja-argp</code> (meson, 7 C files) builds a real <code>libargp.a</code> (verified via <code>ar t</code> listing all 7 real <code>.o</code> TUs) when it succeeds, but fails intermittently in CI against the real <code>/nix/store</code>: ninja's own generated install rule appears to write to a literal placeholder path (<code>PermissionError: [Errno 13] Permission denied: '/nonexistent'</code>), not yet root-caused. Not reproduced locally against the redirected alt-store; marked informational/non-blocking in <code>ci.yml</code>.</p>
 <h3 id="drowse-mechanism-callpackage">drowse mechanism (<code>callPackage</code>)</h3>
 <p><code>drowse-hello</code> builds a real, runnable <code>bin/hello</code> using drowse's own tested example (<code>tests/hello.nix</code>) verbatim. Demonstrates "avoid IFD" rather than fine-grained per-TU caching, distinct from the other three mechanisms.</p>
+<h3 id="cargo-dyndrv-mechanism-per-crate-dynamic-derivations-for-rust">cargo-dyndrv mechanism (per-crate dynamic derivations for Rust)</h3>
+<p>Fifth independent mechanism in this survey, and the first targeting a language other than C/C++: <a href="https://github.com/obsidiansystems/cargo-dyndrv">cargo-dyndrv</a> turns Cargo's own unit graph into one dynamic derivation per crate (the direct Rust equivalent of nixgg/dyn-drvs' per-translation-unit splitting, since Cargo's compilation unit is the crate, not the file). Same <code>builtins.outputOf</code>/<code>builder-rpc-v0</code> primitive as the other four mechanisms; confirmed working via this repo's own <code>try-it-out/run-nix.sh</code> bootstrap with no modification needed.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cargo-dyndrv (self-build, ~50 crates)</td>
+<td><strong>PASS</strong></td>
+<td><code>cargo-dyndrv-dyn</code> builds itself via its own mechanism, real per-crate dynamic derivations, genuine ELF binary confirmed.</td>
+</tr>
+<tr>
+<td>hyperfine (~173 crates, real nixpkgs package)</td>
+<td><strong>BLOCKED</strong></td>
+<td>Picked for a clean first attempt: zero external C buildInputs (no pkg-config/extern.json wiring, unlike e.g. ripgrep's <code>pcre2</code> dependency), plain filesystem-only <code>build.rs</code>. Blocked anyway: compiling <code>portable-atomic</code>'s own build script (a transitive dependency via <code>indicatif</code>, hyperfine's ordinary, non-optional progress-bar library) fails with <code>environment variable 'CARGO_PKG_NAME' not defined at compile time</code> -- root-caused directly in cargo-dyndrv's own source (<code>add_metadata_env</code> in <code>cargo-dyndrv/src/main.rs</code>): it populates <code>CARGO_PKG_VERSION</code> and its <code>MAJOR</code>/<code>MINOR</code>/<code>PATCH</code>/<code>PRE</code> components for a build-script invocation, but not <code>CARGO_PKG_NAME</code> -- the function's own trailing comment, <code>// TODO: more of these</code>, is an acknowledged, not-yet-filled gap. No package-level workaround: <code>portable-atomic</code> is a transitive, non-optional dependency, and <code>env!("CARGO_PKG_NAME")</code> is a common, standard idiom in real <code>build.rs</code> scripts -- likely blocks a large fraction of real-world crate graphs, not just this one package. Details in <code>nix/packages/hyperfine-cargo-dyndrv.nix</code>.</td>
+</tr>
+</tbody>
+</table>
 <h3 id="the-break-even-lesson">The break-even lesson</h3>
 <p>Per-TU acceleration pays off only when per-unit compile cost is high enough to amortize the registration tax (~80ms/derivation for <code>nix derivation add</code>, per dyn-drvs' <code>registration-overhead.sh</code>). A 30-file synthetic library with real per-file compile weight shows a 2.90x win; the same mechanism against freetype's small, fast-compiling TUs shows a ~6.7x loss (measured directly here, cold build). Both TU count and per-unit compile cost matter -- wins and losses don't generalize by mechanism alone.</p>
 <h3 id="how-to-reproduce">How to reproduce</h3>
