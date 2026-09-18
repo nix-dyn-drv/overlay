@@ -26,6 +26,15 @@
     };
     nixNinja.url = "github:pdtpartners/nix-ninja";
     drowse.url = "github:figsoda/drowse";
+    # Fifth independent dynamic-derivations mechanism: per-crate Rust
+    # builds (the natural equivalent of per-TU C/C++ acceleration --
+    # Cargo's own compilation unit is the crate, not the file), via
+    # builtins.outputOf/builder-rpc-v0, same as nixgg/dyn-drvs. First
+    # mechanism in this survey targeting a language other than C/C++.
+    cargoDyndrv = {
+      url = "github:obsidiansystems/cargo-dyndrv";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Same pin nixgg's own flake.nix uses for its lua/lua-batch examples --
     # a small (~30 TU), plain-Makefile, single-archive fixture, ideal for
     # directly testing whether nixgg's batchGroups closes the per-TU
@@ -324,6 +333,21 @@
           drowse-hello = import ./nix/packages/drowse-hello.nix {
             inherit pkgs;
             drowse = inputs.drowse.lib.${system};
+          };
+
+          # cargo-dyndrv mechanism: per-crate dynamic derivations for
+          # Rust (Cargo's own compilation unit is the crate, the direct
+          # equivalent of nixgg/dyn-drvs' per-translation-unit
+          # splitting for C/C++). Fifth independent mechanism in this
+          # survey; the first targeting a language other than C/C++.
+          # cargo-dyndrv-dyn: cargo-dyndrv builds ITSELF (~50 crates)
+          # via its own mechanism -- the tool's own self-hosting proof
+          # point, passed through verbatim from its own flake.
+          cargo-dyndrv-dyn = inputs.cargoDyndrv.packages.${system}.cargo-dyndrv-dyn;
+
+          hyperfine-cargo-dyndrv = import ./nix/packages/hyperfine-cargo-dyndrv.nix {
+            inherit pkgs;
+            buildDynamicCrate = inputs.cargoDyndrv.packages.${system}.buildDynamicCrate;
           };
 
           # Split into three attrs since a flake package must be a
