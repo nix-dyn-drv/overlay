@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789754214664,
+  "lastUpdate": 1789754619920,
   "repoUrl": "https://github.com/nix-dyn-drv/overlay",
   "entries": {
     "Benchmark": [
@@ -1130,6 +1130,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "freetype patch-rebuild speedup (plain/accelerated)",
             "value": 0.57,
+            "unit": "x"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "tomberek@users.noreply.github.com",
+            "name": "tomberek",
+            "username": "tomberek"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d962eb269e8959ec7f5c83a9e5dc46dd83d72198",
+          "message": "Merge pull request #27 from nix-dyn-drv/nixgg-vs-dyndrv-benchmark\n\nAdd direct nixgg-vs-dyndrv head-to-head benchmark (compiled shim closes the gap)",
+          "timestamp": "2026-09-18T13:40:30-04:00",
+          "tree_id": "c5bf372c2740f4be564026812be8812fd6a15b8b",
+          "url": "https://github.com/nix-dyn-drv/overlay/commit/d962eb269e8959ec7f5c83a9e5dc46dd83d72198"
+        },
+        "date": 1789754618799,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "freetype patch-rebuild speedup (plain/accelerated)",
+            "value": 0.58,
             "unit": "x"
           }
         ]
