@@ -7,6 +7,7 @@
   edit ? null, # null | a relative path inside lua's src/ to touch (e.g. "src/lmathlib.c")
   variant, # "plain" | "accelerated"
   nixPackagePath ? null,
+  dyndrvShimPath ? null, # store path of the compiled rust/dyndrv-shim package -- when set, exercises the compiled path instead of the default bash toNodeBash/collectStubs path
 }:
 let
   pkgs = (builtins.getFlake (toString flakeDir)).legacyPackages.${builtins.currentSystem};
@@ -40,11 +41,15 @@ let
   resolvedNixPackage =
     if nixPackagePath != null then builtins.storePath nixPackagePath else pkgs.nix;
 
+  resolvedDyndrvShim =
+    if dyndrvShimPath != null then builtins.storePath dyndrvShimPath else null;
+
   stdenv =
     if variant == "accelerated" then
       dyndrv.accelerate.mkAcceleratedStdenv {
         nixPackage = resolvedNixPackage;
         stdenv = pkgs.stdenv;
+        dyndrvShim = resolvedDyndrvShim;
       }
     else
       pkgs.stdenv;

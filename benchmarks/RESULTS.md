@@ -61,39 +61,71 @@ fixture, reused verbatim) rebuilt from a warm store.
 | Mechanism | Run 1 | Run 2 | Run 3 | Run 4 | Mean | Derivations rebuilt |
 |---|---|---|---|---|---|---|
 | nixgg (`mkNixggBuild`) | 7.99s | 8.11s | 8.05s | -- | **8.05s** | 4 (`lua-src-edited`, `nixgg-0`, `nixgg-lua`, `tu-lmathlib.o`) |
-| dyn-drvs (`mkAcceleratedStdenv`) | 19.86s | 30.90s | 21.22s | 18.87s | **22.71s** | 5 (`lua-5.4.7-edited`, `lua-bench.drv.drv`, `dyndrv-src_lmathlib_o`, `lua-bench.drv`, `lua-bench` [replay]) |
+| dyn-drvs, bash shim (default) | 19.86s | 30.90s | 21.22s | 18.87s | **22.71s** | 5 (`lua-5.4.7-edited`, `lua-bench.drv.drv`, `dyndrv-src_lmathlib_o`, `lua-bench.drv`, `lua-bench` [replay]) |
+| dyn-drvs, compiled shim (`dyndrvShim`) | 8.10s | 9.01s | 6.53s | -- | **7.88s** | 5 (same shape, different naming convention) |
 
-**nixgg is ~2.8x faster than dyn-drvs on this identical one-file patch
-rebuild**, and roughly 3-4x more consistent run-to-run (dyn-drvs'
-30.90s outlier vs. its own 18.87s best run is a much wider spread than
-nixgg's tight 7.99-8.11s band).
+**With dyn-drvs' default (bash `toNodeBash`/`collectStubs`) shim, nixgg
+is ~2.8x faster** on this identical one-file patch rebuild, and roughly
+3-4x more consistent run-to-run (dyn-drvs' 30.90s outlier vs. its own
+18.87s best run is a much wider spread than nixgg's tight 7.99-8.11s
+band).
 
-**Why**: dyn-drvs' `phases.split` architecture (sandboxed
-`builder-rpc-v0` phase 1, THEN an ordinary "replay" phase 2 derivation
-that reruns `installPhase`/`fixupPhase` against phase 1's resolved
-output) registers one MORE derivation per rebuild than nixgg's more
-direct model needs (5 `building '...'` lines vs. nixgg's 4, for an
-otherwise identical single-TU edit) -- confirmed directly by comparing
-each run's own build log. This extra registration round-trip
-(`nix derivation add` + `nix store submit-output`, the same
-per-derivation "tax" `registration-overhead.sh` already measures at
-~80ms/call in isolation, but evidently costing much more than that in
-the full sandboxed-phase-1-then-replay-phase-2 pipeline in practice)
-is architectural, not a bug -- it's the cost of dyn-drvs' two-phase
-split existing at all (see `phases/split.nix`'s own header comment for
-why that split is structurally required: `builder-rpc-v0` cannot
-realize a derivation from inside its own running script, so
-`installPhase`/`fixupPhase` can't run in the same sandboxed derivation
-that ran `buildPhase`).
+**With dyn-drvs' COMPILED shim (`dyndrvShim`, `rust/dyndrv-shim.nix`,
+passed via `dyndrvShimPath`), the gap disappears entirely** -- 7.88s
+mean vs. nixgg's 8.05s, essentially a tie. This was root-caused by
+DIRECT INVESTIGATION of the initial hypothesis, then disproven and
+re-tested:
+
+- **Initial (WRONG) hypothesis**: the extra `lua-bench` "replay"
+  derivation (5 `building '...'` lines vs. nixgg's 4 -- dyn-drvs'
+  `phases.split` architecture runs a sandboxed `builder-rpc-v0` phase
+  1, THEN an ordinary phase 2 derivation that reruns `installPhase`/
+  `fixupPhase` against phase 1's resolved output) was assumed to be
+  the cause. Investigation showed this derivation-count difference is
+  REAL but not the actual driver of the wall-clock gap: nixgg's OWN
+  general-purpose mechanism (`splitStdenv`, not the narrower
+  `mkNixggBuild` this benchmark's `.#lua` output actually uses) pays
+  the IDENTICAL extra "assemble tree" + "replay install/fixup"
+  registration round-trip, for the identical structural reason (an
+  ordinary, eval-time-constructed derivation can't declare a
+  dependency on a drvPath only discovered at build time inside the
+  sandbox). `examples/lua/default.nix` uses the lighter
+  `mkNixggBuild`, which never models `installPhase`/`fixupPhase`/
+  multi-output splitting at all -- an apples-to-oranges comparison on
+  derivation count specifically, though the WALL-CLOCK numbers
+  themselves are still a fair, real comparison of "what each project
+  ships as its own easiest path to accelerate a package."
+- **Actual cause**: dyn-drvs' DEFAULT shim path (`toNodeBash`,
+  `nix/lib/shim/wrapCommand.nix`'s bash wrapper script) spawns
+  `nix-instantiate`/`jq`/`nix` CLI subprocesses PER intercepted `cc`/
+  `ar` invocation. nixgg's Go shim talks to the sandbox over a
+  persistent RPC connection instead of per-call fork+exec
+  (`NIXGG_RPC=1`, per its own `dynDrvShared.nix` comment). dyn-drvs'
+  own compiled shim (`rust/dyndrv-shim`, wired via the SAME
+  `dyndrvShim`/`dyndrvShimPath` parameter `try-it-out/benchmarks/
+  real-package-patch-rebuild.sh` already uses to re-measure this
+  exact axis) exists for precisely this reason and, once actually
+  measured against nixgg here, closes the gap completely.
+
+**Practical implication**: dyn-drvs' default bash shim path is fine
+for correctness/prototyping, but the compiled `dyndrvShim` path is the
+one to use whenever wall-clock matters -- confirmed via this benchmark
+to be the dominant factor, not `phases.split`'s own extra
+registration round-trip (which is real, but small: ~80ms/call per
+`registration-overhead.sh`, nowhere near enough to explain a
+multi-second gap on its own).
 
 **Caveat**: this is ONE fixture (lua, 34 small/fast-compiling TUs) on
-ONE machine. Per this file's own "break-even lesson" below, per-TU
+ONE machine, with real run-to-run variance observed on both sides
+(nixgg's own `mkNixggBuild` path spiked to 16.46s in one later,
+single-sample automated run, vs. its own 7.99-8.11s band across the 3
+manual runs above -- machine noise cuts both ways, not just against
+dyn-drvs). Per this file's own "break-even lesson" below, per-TU
 acceleration's wall-clock outcome depends heavily on per-unit compile
-cost vs. registration overhead -- a heavier-per-TU package might narrow
-or reverse this gap; a lighter one would widen it further in nixgg's
-favor. Reproduce via
-`benchmarks/nixgg-vs-dyndrv-lua-bench.sh` (see "How to reproduce"
-below) before drawing conclusions beyond this one workload.
+cost vs. registration overhead -- a heavier-per-TU package might shift
+this further in either direction. Reproduce via
+`benchmarks/nixgg-vs-dyndrv-lua-bench.sh DYNDRV_SHIM=1` (see "How to
+reproduce" below) before drawing conclusions beyond this one workload.
 
 ## nixgg mechanism (`splitStdenv`)
 
@@ -193,6 +225,9 @@ For the direct nixgg-vs-dyndrv head-to-head above:
 
 ```console
 $ DYNDRV_ROOT=~/dyn-drvs NIXGG_ROOT=~/nixgg ./benchmarks/nixgg-vs-dyndrv-lua-bench.sh
+# add DYNDRV_SHIM=1 to measure dyn-drvs' compiled shim path instead of
+# its default bash path -- this is the axis that actually explains the
+# gap, see the section above
 ```
 
 See that script's own header for the full methodology (why `--builders

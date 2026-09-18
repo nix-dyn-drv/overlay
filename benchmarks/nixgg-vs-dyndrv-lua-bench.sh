@@ -39,6 +39,13 @@
 # Env vars:
 #   DYNDRV_ROOT   path to the dyn-drvs checkout (default: ~/dyn-drvs)
 #   NIXGG_ROOT    path to the nixgg checkout (default: ~/nixgg)
+#   DYNDRV_SHIM   1 to ALSO measure dyn-drvs' compiled rust/dyndrv-shim
+#                 path (real per-call RPC instead of bash's
+#                 nix-instantiate/jq/nix subprocess spawns per
+#                 intercepted cc/ar invocation), alongside the default
+#                 bash toNodeBash/collectStubs path. Confirmed this is
+#                 where most of the gap lives, not derivation count --
+#                 see RESULTS.md's own writeup.
 #   BENCH_DIR     scratch dir for both alt stores (default: fresh mktemp -d)
 #   KEEP=1        keep BENCH_DIR after the run, for inspection
 
@@ -70,13 +77,30 @@ mkdir -p "$DYNDRV_STORE"
 DYNDRV_EXTRA_FEATURES="nix-command ca-derivations dynamic-derivations recursive-nix"
 DYNDRV_SYSTEM_FEATURES="builder-rpc-v0"
 
+DYNDRV_SHIM_PATH=""
+if [[ "${DYNDRV_SHIM:-0}" = "1" ]]; then
+  echo "==> resolving dyn-drvs' own compiled rust/dyndrv-shim (one-time)"
+  DYNDRV_SHIM_PATH=$(nix build --impure --no-link --print-out-paths \
+    -f "$DYNDRV_ROOT/rust/dyndrv-shim.nix" '^out')
+  # The compiled shim is a small, purely local derivation with no cache
+  # entry anywhere -- a fresh alt store has no substituter for it, so
+  # copy its closure in explicitly first (confirmed necessary by direct
+  # reproduction: without this, the warm build fails outright with "is
+  # required, but there is no substituter that can build it").
+  "$DYNDRV_NIX_BIN" copy --no-check-sigs --to "local?root=$DYNDRV_STORE" "$DYNDRV_SHIM_PATH" \
+    --extra-experimental-features "$DYNDRV_EXTRA_FEATURES" >/dev/null 2>&1
+fi
+
 dyndrv_build() {
-  local edit_arg=() substituter_arg=()
+  local edit_arg=() substituter_arg=() shim_arg=()
   if [[ -n "${1:-}" ]]; then
     edit_arg=(--argstr edit "$1")
   fi
   if [[ "${2:-}" = "no-substitute" ]]; then
     substituter_arg=(--option substituters "")
+  fi
+  if [[ -n "$DYNDRV_SHIM_PATH" ]]; then
+    shim_arg=(--argstr dyndrvShimPath "$DYNDRV_SHIM_PATH")
   fi
   "$DYNDRV_NIX_BIN" build \
     --builders "" \
@@ -89,6 +113,7 @@ dyndrv_build() {
     --argstr variant accelerated \
     --argstr nixPackagePath "$DYNDRV_NIX" \
     "${edit_arg[@]}" \
+    "${shim_arg[@]}" \
     -f "$SCRIPT_DIR/lua-bench-edited.nix"
 }
 
@@ -99,7 +124,7 @@ dyndrv_build "" >"$BENCH_DIR/dyndrv-warm.log" 2>&1 || {
   exit 1
 }
 
-echo "==> dyn-drvs: timing patch rebuild (src/lmathlib.c edited)"
+echo "==> dyn-drvs: timing patch rebuild (src/lmathlib.c edited)$([[ -n "$DYNDRV_SHIM_PATH" ]] && echo " [compiled shim]")"
 DYNDRV_START=$(date +%s.%N)
 dyndrv_build "src/lmathlib.c" "no-substitute" >"$BENCH_DIR/dyndrv-patch.log" 2>&1
 DYNDRV_STATUS=$?
@@ -110,7 +135,15 @@ if [[ $DYNDRV_STATUS -ne 0 ]]; then
   tail -20 "$BENCH_DIR/dyndrv-patch.log" >&2
   exit 1
 fi
-DYNDRV_TU_REBUILDS=$(grep -c "building '.*dyndrv-src_.*_o\.drv'" "$BENCH_DIR/dyndrv-patch.log" || true)
+# The bash toNodeBash/collectStubs path names a solo unit
+# "dyndrv-<flattened-relative-path>"; the compiled path (dyndrvShim)
+# names each derivation after the output's own basename instead
+# (wrapper.rs's own drv_name) -- count whichever shape is active.
+if [[ -n "$DYNDRV_SHIM_PATH" ]]; then
+  DYNDRV_TU_REBUILDS=$(grep -cE "building '.*(\.o|\.lo)\.drv'" "$BENCH_DIR/dyndrv-patch.log" || true)
+else
+  DYNDRV_TU_REBUILDS=$(grep -c "building '.*dyndrv-src_.*_o\.drv'" "$BENCH_DIR/dyndrv-patch.log" || true)
+fi
 
 echo "  dyndrv elapsed: ${DYNDRV_ELAPSED}s, TU derivations rebuilt: $DYNDRV_TU_REBUILDS"
 echo ""
